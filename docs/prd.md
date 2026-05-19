@@ -229,6 +229,7 @@ The MVP focuses ONLY on:
 | Conversation Session Memory | Short-term chat continuity |
 | Source Reference Display | Display retrieved regulation sources |
 | Google Drive-Based Document Source | PDFs stored in Google Drive |
+| Progressive Web App (PWA) | Installable cross-device web application |
 
 ---
 
@@ -414,6 +415,15 @@ Users should be able to:
 - immediately search regulations,
 - ask questions,
 - and retrieve answers without document preparation or upload workflows.
+
+---
+
+## Principle 6 — Mobile-Accessible Research Experience
+
+The platform should provide a responsive and installable Progressive Web App (PWA) experience optimized for:
+- desktop research workflows,
+- tablet usage,
+- and mobile accessibility without requiring native applications.
 
 ---
 
