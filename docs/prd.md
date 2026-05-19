@@ -1,4 +1,4 @@
-# /docs/prd.md
+# prd.md
 
 # Lensa Adem — Product Requirements Document (PRD)
 
