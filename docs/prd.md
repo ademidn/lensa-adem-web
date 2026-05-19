@@ -464,6 +464,7 @@ Users should be able to:
 | AI-Assisted Development | Optimized for vibe coding workflows |
 | Centralized Data Ownership | Regulation database maintained internally by platform |
 | Google Drive Storage | Google Drive used as primary PDF storage for MVP |
+| PWA-First Platform Strategy | MVP delivered as Progressive Web App for cross-device accessibility |
 
 ---
 
