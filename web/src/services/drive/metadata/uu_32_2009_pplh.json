@@ -1,6 +1,6 @@
 {
     "title": "Perlindungan dan Pengelolaan Lingkungan Hidup",
-    "regulation_type": "UU",
+    "regulation_type": ["Undang-Undang", "uu"],
     "number": 32,
     "year": 2009,
     "issuing_authority": "Pemerintah Indonesia",

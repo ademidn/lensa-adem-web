@@ -1,6 +1,6 @@
 {
     "title": "Pengelolaan Sampah",
-    "regulation_type": "UU",
+    "regulation_type": ["Undang-Undang", "uu"],
     "number": 18,
     "year": 2008,
     "issuing_authority": "Pemerintah Indonesia",

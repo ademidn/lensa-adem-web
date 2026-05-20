@@ -1,6 +1,6 @@
 {
     "title": "Cipta Kerja",
-    "regulation_type": "UU",
+    "regulation_type": ["Undang-Undang", "uu"],
     "number": 6,
     "year": 2023,
     "issuing_authority": "Pemerintah Indonesia",
