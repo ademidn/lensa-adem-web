@@ -19,7 +19,9 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         success: false,
-        error: "AI generation failed",
+        error: {
+          message: "AI generation failed",
+        },
       },
       {
         status: 500,
