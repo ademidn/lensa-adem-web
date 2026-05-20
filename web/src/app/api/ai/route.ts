@@ -9,7 +9,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       success: true,
-      data: response,
+      data: {
+        message: response,
+      },
     });
   } catch (error) {
     console.error(error);
