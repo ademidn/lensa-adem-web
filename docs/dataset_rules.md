@@ -1,45 +1,59 @@
-Document:
+# dataset_rules.md
 
-naming conventions,
-metadata rules,
-ingestion lifecycle,
-PDF quality standards.
-
-
-1. Naming Conventions
-
-Document Name Format: filename.ext
+## Naming Conventions
 
 Type: snake_case (lowercase with underscores)
 
-Example: peraturan_menteri_nomor_75_tahun_2019.pdf
+Document Name Format: regulationtype_number_year_about.pdf
 
-Metadata: Full descriptive name in title field
+Example: uu_32_2009_pplh.pdf
 
-2. Metadata Rules
 
-Required Fields: title, regulation_type, number, year, issuing_authority, topic_tags, status_active, doc_url
+# Metadata
 
-Topic Tags: 3-5 relevant keywords
+Example structure:
+```json
+{
+    "title": "Perlindungan dan Pengelolaan Lingkungan Hidup",
+    "regulation_type": ["Undang-Undang", "uu"],
+    "number": 32,
+    "year": 2009,
+    "issuing_authority": "Pemerintah Republik Indonesia",
+    "topic_tags": [
+        "lingkungan hidup",
+        "perlindungan lingkungan hidup",
+        "pengelolaan lingkungan hidup",
+        "pencemaran lingkungan",
+        "kerusakan lingkungan",
+        "penegakan hukum lingkungan"
+    ],
+    "status_active": true,
+    "doc_url": "https://drive.google.com/file/d/1sDAhsmQtEVkO-WE19yYN3bCY5iR83FVc/view?usp=drive_link"_
+}
+```
 
-Status Active: true for currently valid regulations, false for revoked/superseded
+# Ingestion Lifecycle,
 
-Date Format: YYYY-MM-DD for effective_date and revoked_date
+Each document should later have lifecycle stages:
 
-3. Ingestion Lifecycle
+| Stage | Meaning |
+|-------|---------|
+| uploaded | raw upload |
+| validated | naming validated |
+| extracted | text extracted |
+| chunked | chunk pipeline completed |
+| embedded | embeddings created |
+| indexed | vector DB indexed |
+| active | searchable |
+| archived | deprecated |
 
-New Upload → Extraction → Validation → Metadata Enrichment → Ready
+# Document Quality Standards
 
-Process: Scheduled at 02.00 WIB daily
+Reject PDFs if:
 
-Automation: All steps are automated
-
-4. PDF Quality Standards
-
-Minimum Resolution: 300 DPI
-
-File Size: < 20 MB
-
-Format: PDF/A (ISO 19005) preferred, PDF 1.4 acceptable
-
-Security: No encryption, no passwords
+- corrupted,
+- scanned unreadably,
+- duplicate,
+- incomplete,
+- unofficial source,
+- low OCR quality.
