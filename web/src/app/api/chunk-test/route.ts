@@ -34,6 +34,8 @@ export async function GET() {
             success: true,
             totalChunks: chunks.length,
             firstChunk: chunks[0],
+            secondChunk: chunks[1],
+            thirdChunk: chunks[2],
         });
     } catch (error: any) {
         console.error(error);
