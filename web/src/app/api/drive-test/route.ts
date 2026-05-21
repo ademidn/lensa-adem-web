@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { listRegulationFiles } from "@/services/drive/files";
+import { listAllRegulationFiles } from "@/services/drive/files";
 
 export async function GET() {
   try {
-    const files = await listRegulationFiles(
+    const files = await listAllRegulationFiles(
       "1CH54mJJ2AAy4P4xqjGKIbYpnjpM8Shsl"
     );
 
