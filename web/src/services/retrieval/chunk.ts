@@ -1,8 +1,9 @@
 import { RegulationChunk } from "./types";
 
+import { splitByLegalSections } from "./legal-split";
+
 interface ChunkOptions {
   chunkSize?: number;
-  overlap?: number;
 }
 
 export function chunkLegalText(
@@ -14,36 +15,60 @@ export function chunkLegalText(
   },
   options: ChunkOptions = {}
 ): RegulationChunk[] {
-  const chunkSize = options.chunkSize || 1500;
-  const overlap = options.overlap || 300;
+  const sections =
+    splitByLegalSections(text);
+
+  const chunkSize =
+    options.chunkSize || 2000;
 
   const chunks: RegulationChunk[] = [];
 
-  let start = 0;
   let chunkIndex = 0;
 
-  while (start < text.length) {
-    const end = Math.min(
-      start + chunkSize,
-      text.length
-    );
+  for (const section of sections) {
+    if (section.length <= chunkSize) {
+      chunks.push({
+        id: `${metadata.fileId}_${chunkIndex}`,
 
-    const content = text.slice(start, end);
+        content: section,
 
-    chunks.push({
-      id: `${metadata.fileId}_${chunkIndex}`,
+        metadata: {
+          ...metadata,
+          chunkIndex,
+        },
+      });
 
-      content,
+      chunkIndex++;
 
-      metadata: {
-        ...metadata,
-        chunkIndex,
-      },
-    });
+      continue;
+    }
 
-    start += chunkSize - overlap;
+    let start = 0;
 
-    chunkIndex++;
+    while (start < section.length) {
+      const end = Math.min(
+        start + chunkSize,
+        section.length
+      );
+
+      const content =
+        section.slice(start, end);
+
+      chunks.push({
+        id: `${metadata.fileId}_${chunkIndex}`,
+
+        content,
+
+        metadata: {
+          ...metadata,
+          chunkIndex,
+        },
+      });
+
+      start += chunkSize;
+
+      chunkIndex++;
+    }
   }
 
   return chunks;
