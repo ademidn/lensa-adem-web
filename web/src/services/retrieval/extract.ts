@@ -1,27 +1,41 @@
-import * as pdfjsLib from "pdfjs-dist";
+import PDFParser from "pdf2json";
 
 export async function extractPdfText(
   buffer: Buffer
-) {
-  const uint8Array = new Uint8Array(buffer);
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const pdfParser = new PDFParser();
 
-  const pdf = await pdfjsLib.getDocument({
-    data: uint8Array,
-  }).promise;
+    pdfParser.on(
+      "pdfParser_dataError",
+      (error) => {
+        reject(error);
+      }
+    );
 
-  let fullText = "";
+    pdfParser.on(
+      "pdfParser_dataReady",
+      (pdfData) => {
+        try {
+          let text = "";
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
+          for (const page of pdfData.Pages) {
+            for (const textItem of page.Texts) {
+              for (const run of textItem.R) {
+                text += decodeURIComponent(run.T) + " ";
+              }
 
-    const content = await page.getTextContent();
+              text += "\n";
+            }
+          }
 
-    const strings = content.items
-      .map((item: any) => item.str)
-      .join(" ");
+          resolve(text);
+        } catch (err) {
+          reject(err);
+        }
+      }
+    );
 
-    fullText += strings + "\n";
-  }
-
-  return fullText;
+    pdfParser.parseBuffer(buffer);
+  });
 }
