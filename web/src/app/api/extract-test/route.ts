@@ -4,7 +4,7 @@ import { extractPdfText } from "@/services/retrieval/extract";
 
 export async function GET() {
   try {
-    const fileId = "1LJz3YRuwqUkcrA_y0kcwqnZdNXFKR4iK";
+    const fileId = "1sDAhsmQtEVkO-WE19yYN3bCY5iR83FVc";
 
     const pdfBuffer = await downloadPdf(fileId);
 
