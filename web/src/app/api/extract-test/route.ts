@@ -14,16 +14,17 @@ export async function GET() {
       success: true,
       preview: text.slice(0, 3000),
     });
-  } catch (error) {
-    console.error(error);
+  } catch (error: any) {
+      console.error(error);
 
-    return NextResponse.json(
-      {
-        success: false,
-      },
-      {
-        status: 500,
-      }
-    );
-  }
+      return NextResponse.json(
+        {
+          success: false,
+          error: error?.message || "Unknown error",
+        },
+        {
+          status: 500,
+        }
+      );
+    }
 }
