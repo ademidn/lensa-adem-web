@@ -40,15 +40,28 @@ export async function listAllRegulationFiles(
 }
 
 export async function downloadPdf(fileId: string) {
-  const response = await drive.files.get(
-    {
-      fileId,
-      alt: "media",
-    },
-    {
-      responseType: "arraybuffer",
-    }
-  );
+  try {
+    console.log("Downloading file:", fileId);
 
-  return Buffer.from(response.data as ArrayBuffer);
+    const response = await drive.files.get(
+      {
+        fileId,
+        alt: "media",
+      },
+      {
+        responseType: "arraybuffer",
+      }
+    );
+
+    console.log("Download success");
+
+    return Buffer.from(response.data as ArrayBuffer);
+  } catch (error: any) {
+    console.error(
+      "DOWNLOAD ERROR:",
+      error?.response?.data || error.message
+    );
+
+    throw error;
+  }
 }
