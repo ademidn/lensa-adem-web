@@ -3,7 +3,7 @@ import { drive } from "./client";
 export async function listFolders(parentFolderId: string) {
   const response = await drive.files.list({
     q: `'${parentFolderId}' in parents and mimeType='application/vnd.google-apps.folder'`,
-    fields: "files(id, name)",
+    fields: "files(id, name, mimeType)",
   });
 
   return response.data.files || [];
@@ -12,7 +12,7 @@ export async function listFolders(parentFolderId: string) {
 export async function listPdfFiles(folderId: string) {
   const response = await drive.files.list({
     q: `'${folderId}' in parents and mimeType='application/pdf'`,
-    fields: "files(id, name)",
+    fields: "files(id, name, mimeType)",
   });
 
   return response.data.files || [];
