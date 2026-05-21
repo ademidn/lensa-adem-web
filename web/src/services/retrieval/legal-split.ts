@@ -2,7 +2,7 @@ export function splitByLegalSections(
   text: string
 ): string[] {
   const sections = text.split(
-    /\n(?=Pasal\s+\d+)/g
+    /\n\s*(?=Pasal\s+\d+\s*$)/gm
   );
 
   return sections.filter(
