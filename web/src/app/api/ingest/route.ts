@@ -27,20 +27,25 @@ export async function GET() {
 
   try {
 
-    const folders =
-      await listAllRegulationFiles(
-        ROOT_FOLDER_ID
+    // Load existing vector docs
+    const existingDocs =
+      getDocuments();
+
+    // Create fast lookup set
+    const existingIds =
+      new Set(
+        existingDocs.map((d) => d.id)
       );
 
     const documents: VectorDocument[] = [];
 
-    const existingDocs = getDocuments();
-
-    const existingIds = new Set(
-        existingDocs.map((d) => d.id)
-    );
-
     let embeddedCount = 0;
+
+    // Get all folders + files
+    const folders =
+      await listAllRegulationFiles(
+        ROOT_FOLDER_ID
+      );
 
     for (const folder of folders) {
 
@@ -49,6 +54,10 @@ export async function GET() {
         if (!file.id || !file.name) {
           continue;
         }
+
+        console.log(
+          "\n=============================="
+        );
 
         console.log(
           "INGESTING:",
@@ -61,48 +70,71 @@ export async function GET() {
 
         // 2. Extract text
         const text =
-          await extractPdfText(pdfBuffer);
+          await extractPdfText(
+            pdfBuffer
+          );
 
         // 3. Create chunks
         const chunks =
           chunkLegalText({
             text,
-            fileId: file.id!,
-            fileName: file.name!,
-            regulationType: 
+            fileId: file.id,
+            fileName: file.name,
+            regulationType:
               folder.folder || "unknown",
           });
 
+        const totalChunks =
+          chunks.length;
+
+        let fileChunkCount = 0;
+
+        console.log(
+          `Total chunks: ${totalChunks}`
+        );
+
         // 4. Generate embeddings
         for (const chunk of chunks) {
-          if (existingIds.has(chunk.id)) {
-            
+
+          // Skip already embedded chunks
+          if (
+            existingIds.has(chunk.id)
+          ) {
+
             console.log(
-                "Skipping existing chunk:",
-                chunk.id
+              "Skipping existing chunk:",
+              chunk.id
             );
 
             continue;
-          }  
+          }
 
+          // Generate embedding
           const embedding =
             await generateEmbedding(
               chunk.content
             );
 
-            await new Promise((resolve) =>
+          // Delay to avoid rate limits
+          await new Promise(
+            (resolve) =>
               setTimeout(resolve, 4000)
-            );
+          );
 
           documents.push({
             ...chunk,
             embedding,
           });
 
+          fileChunkCount++;
           embeddedCount++;
 
           console.log(
-            `Embedded ${embeddedCount} chunks`
+            `[${file.name}] Chunk ${fileChunkCount}/${totalChunks} embedded`
+          );
+
+          console.log(
+            `Global embedded chunks: ${embeddedCount}`
           );
 
           console.log(
@@ -110,10 +142,14 @@ export async function GET() {
             chunk.id
           );
         }
+
+        console.log(
+          `Finished ingesting ${file.name}`
+        );
       }
     }
 
-    // 5. Store in memory vector DB
+    // 5. Persist vector docs
     addDocuments(documents);
 
     return NextResponse.json({
@@ -121,6 +157,8 @@ export async function GET() {
 
       totalDocuments:
         documents.length,
+
+      embeddedCount,
     });
 
   } catch (error: any) {
@@ -129,7 +167,10 @@ export async function GET() {
 
     return NextResponse.json({
       success: false,
-      error: error.message,
+
+      error:
+        error?.message ||
+        "Unknown error",
     });
   }
 }
