@@ -56,12 +56,13 @@ export async function GET() {
 
         // 3. Create chunks
         const chunks =
-          chunkLegalText(
+          chunkLegalText({
             text,
-            file.id,
-            file.name,
-            folder.folder || "unknown"
-          );
+            fileId: file.id!,
+            fileName: file.name!,
+            regulationType: 
+              folder.folder || "unknown",
+          });
 
         // 4. Generate embeddings
         for (const chunk of chunks) {
@@ -69,6 +70,10 @@ export async function GET() {
           const embedding =
             await generateEmbedding(
               chunk.content
+            );
+
+            await new Promise((resolve) =>
+              setTimeout(resolve, 2000)
             );
 
           documents.push({
