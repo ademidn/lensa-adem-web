@@ -8,7 +8,7 @@ import {
 import { extractPdfText }
   from "@/services/retrieval/extract";
 
-import { createChunks }
+import { chunkLegalText }
   from "@/services/retrieval/chunk";
 
 import { generateEmbedding }
@@ -56,7 +56,7 @@ export async function GET() {
 
         // 3. Create chunks
         const chunks =
-          createChunks(
+          chunkLegalText(
             text,
             file.id,
             file.name,
