@@ -1,9 +1,9 @@
+import fs from "fs";
+import path from "path";
+
 export interface VectorDocument {
   id: string;
-
   content: string;
-
-  embedding: number[];
 
   metadata: {
     fileId: string;
@@ -11,20 +11,55 @@ export interface VectorDocument {
     regulationType: string;
     chunkIndex: number;
   };
+
+  embedding: number[];
 }
 
-const vectorStore: VectorDocument[] = [];
+const STORE_PATH = path.join(
+  process.cwd(),
+  "data",
+  "vector-store.json"
+);
+
+let documents: VectorDocument[] = [];
+
+export function loadDocuments() {
+
+  if (!fs.existsSync(STORE_PATH)) {
+    documents = [];
+    return;
+  }
+
+  const raw =
+    fs.readFileSync(STORE_PATH, "utf-8");
+
+  documents = JSON.parse(raw);
+}
+
+export function saveDocuments() {
+
+  fs.mkdirSync(
+    path.dirname(STORE_PATH),
+    { recursive: true }
+  );
+
+  fs.writeFileSync(
+    STORE_PATH,
+    JSON.stringify(documents, null, 2)
+  );
+}
 
 export function addDocuments(
-  documents: VectorDocument[]
+  newDocs: VectorDocument[]
 ) {
-  vectorStore.push(...documents);
+
+  documents.push(...newDocs);
+
+  saveDocuments();
 }
 
-export function getAllDocuments() {
-  return vectorStore;
+export function getDocuments() {
+  return documents;
 }
 
-export function clearDocuments() {
-  vectorStore.length = 0;
-}
+loadDocuments();
