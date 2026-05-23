@@ -15,25 +15,60 @@ const FAILED_DIR =
 
 export function ensureVectorDirs() {
 
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR);
-  }
+  ensureDir(DATA_DIR);
 
-  if (!fs.existsSync(VECTOR_DIR)) {
-    fs.mkdirSync(VECTOR_DIR);
-  }
+  ensureDir(VECTOR_DIR);
 
-  if (!fs.existsSync(FAILED_DIR)) {
-    fs.mkdirSync(FAILED_DIR);
+  ensureDir(FAILED_DIR);
+}
+
+function ensureDir(dir: string) {
+
+  if (!fs.existsSync(dir)) {
+
+    fs.mkdirSync(dir, {
+      recursive: true,
+    });
   }
 }
 
 function sanitizeFileName(
   fileName: string
 ) {
+
   return fileName
     .replace(".pdf", "")
     .replace(/[^a-zA-Z0-9-_]/g, "_");
+}
+
+function getVectorTypeDir(
+  regulationType: string
+) {
+
+  const dir =
+    path.join(
+      VECTOR_DIR,
+      regulationType
+    );
+
+  ensureDir(dir);
+
+  return dir;
+}
+
+function getFailedTypeDir(
+  regulationType: string
+) {
+
+  const dir =
+    path.join(
+      FAILED_DIR,
+      regulationType
+    );
+
+  ensureDir(dir);
+
+  return dir;
 }
 
 export function getVectorFilePath(
@@ -45,8 +80,10 @@ export function getVectorFilePath(
     sanitizeFileName(fileName);
 
   return path.join(
-    VECTOR_DIR,
-    `${regulationType}_${safeName}.json`
+    getVectorTypeDir(
+      regulationType
+    ),
+    `${safeName}.json`
   );
 }
 
@@ -59,8 +96,10 @@ export function getFailedFilePath(
     sanitizeFileName(fileName);
 
   return path.join(
-    FAILED_DIR,
-    `${regulationType}_${safeName}.failed.json`
+    getFailedTypeDir(
+      regulationType
+    ),
+    `${safeName}.failed.json`
   );
 }
 
@@ -89,13 +128,9 @@ export function saveVectorFile(
       fileName
     );
 
-  fs.writeFileSync(
+  atomicWriteJson(
     filePath,
-    JSON.stringify(
-      documents,
-      null,
-      2
-    )
+    documents
   );
 }
 
@@ -114,13 +149,25 @@ export function loadVectorFile(
     return [];
   }
 
-  const raw =
-    fs.readFileSync(
-      filePath,
-      "utf-8"
+  try {
+
+    const raw =
+      fs.readFileSync(
+        filePath,
+        "utf-8"
+      );
+
+    return JSON.parse(raw);
+
+  } catch (error) {
+
+    console.error(
+      "Failed loading vector file:",
+      filePath
     );
 
-  return JSON.parse(raw);
+    return [];
+  }
 }
 
 export function saveFailedChunks(
@@ -135,12 +182,67 @@ export function saveFailedChunks(
       fileName
     );
 
-  fs.writeFileSync(
+  atomicWriteJson(
     filePath,
+    chunks
+  );
+}
+
+export function loadFailedChunks(
+  regulationType: string,
+  fileName: string
+) {
+
+  const filePath =
+    getFailedFilePath(
+      regulationType,
+      fileName
+    );
+
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+
+  try {
+
+    const raw =
+      fs.readFileSync(
+        filePath,
+        "utf-8"
+      );
+
+    return JSON.parse(raw);
+
+  } catch (error) {
+
+    console.error(
+      "Failed loading failed chunks:",
+      filePath
+    );
+
+    return [];
+  }
+}
+
+function atomicWriteJson(
+  filePath: string,
+  data: unknown
+) {
+
+  const tempPath =
+    `${filePath}.tmp`;
+
+  fs.writeFileSync(
+    tempPath,
     JSON.stringify(
-      chunks,
+      data,
       null,
       2
     )
+  );
+
+  fs.renameSync(
+    tempPath,
+    filePath
   );
 }
