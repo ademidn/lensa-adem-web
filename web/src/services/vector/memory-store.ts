@@ -17,7 +17,7 @@ export interface VectorDocument {
 
 const STORE_PATH = path.join(
   process.cwd(),
-  "vector",
+  "data",
   "vector-store.json"
 );
 
