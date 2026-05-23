@@ -44,7 +44,7 @@ function sleep(ms: number) {
 
 async function generateEmbeddingWithRetry(
   text: string,
-  retries = 2
+  retries = 3
 ) {
 
   for (
@@ -199,6 +199,8 @@ export async function GET() {
 
         let fileEmbedded = 0;
 
+        let fileFailed = 0;
+
         for (const chunk of chunks) {
 
           // Skip existing chunk
@@ -281,7 +283,7 @@ export async function GET() {
 
             // Delay between requests
             const requestDelay =
-              12000 + Math.random() * 3000;
+              15000 + Math.random() * 3000;
 
             await sleep(requestDelay);
 
@@ -294,6 +296,8 @@ export async function GET() {
             failedChunks.push(
               chunk
             );
+
+            fileFailed++;
 
             // SAVE FAILED CHUNKS IMMEDIATELY
             saveFailedChunks(
@@ -318,8 +322,19 @@ export async function GET() {
 
               consecutiveFailures = 0;
             }
+
+            // Skip problematic file
+            if (fileFailed >= 10) {
+
+              console.log(
+                `Too many failed chunks for ${file.name}. Skipping remaining chunks.`
+              );
+
+              break;
+            }
           }
         }
+
 
         // Save failed chunks
         if (
@@ -345,7 +360,7 @@ export async function GET() {
           "Cooling down before next file..."
         );
 
-        await sleep(30000);
+        await sleep(120000);
       }
     }
 
