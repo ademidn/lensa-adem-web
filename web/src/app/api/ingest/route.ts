@@ -121,10 +121,15 @@ export async function GET() {
               setTimeout(resolve, 4000)
           );
 
-          documents.push({
+          const document = {
             ...chunk,
             embedding,
-          });
+          };
+
+          documents.push(document);
+
+          // 5. Persist vector docs
+          addDocuments([document]);
 
           fileChunkCount++;
           embeddedCount++;
@@ -149,8 +154,6 @@ export async function GET() {
       }
     }
 
-    // 5. Persist vector docs
-    addDocuments(documents);
 
     return NextResponse.json({
       success: true,
