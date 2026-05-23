@@ -14,11 +14,14 @@ import { chunkLegalText }
 import { generateEmbedding }
   from "@/services/embedding/embed";
 
+import { VectorDocument }
+  from "@/services/vector/memory-store";
+
 import {
-  addDocuments,
-  getDocuments,
-  VectorDocument,
-} from "@/services/vector/memory-store";
+  ensureVectorDirs,
+  saveVectorFile,
+  vectorFileExists,
+} from "@/services/vector/file-store";
 
 const ROOT_FOLDER_ID =
   process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID!;
@@ -27,21 +30,14 @@ export async function GET() {
 
   try {
 
-    // Load existing vector docs
-    const existingDocs =
-      getDocuments();
-
-    // Create fast lookup set
-    const existingIds =
-      new Set(
-        existingDocs.map((d) => d.id)
-      );
-
-    const documents: VectorDocument[] = [];
+    // Ensure vector directories exist
+    ensureVectorDirs();
 
     let embeddedCount = 0;
+    let processedFiles = 0;
+    let skippedFiles = 0;
 
-    // Get all folders + files
+    // Get all regulation folders + files
     const folders =
       await listAllRegulationFiles(
         ROOT_FOLDER_ID
@@ -55,6 +51,28 @@ export async function GET() {
           continue;
         }
 
+        // Skip already ingested files
+        if (
+          vectorFileExists(
+            folder.folder,
+            file.name
+          )
+        ) {
+
+          skippedFiles++;
+
+          console.log(
+            "\n=============================="
+          );
+
+          console.log(
+            "SKIPPING:",
+            file.name
+          );
+
+          continue;
+        }
+
         console.log(
           "\n=============================="
         );
@@ -63,6 +81,8 @@ export async function GET() {
           "INGESTING:",
           file.name
         );
+
+        const documents: VectorDocument[] = [];
 
         // 1. Download PDF
         const pdfBuffer =
@@ -87,81 +107,113 @@ export async function GET() {
         const totalChunks =
           chunks.length;
 
-        let fileChunkCount = 0;
-
         console.log(
           `Total chunks: ${totalChunks}`
         );
 
+        let fileChunkCount = 0;
+
         // 4. Generate embeddings
         for (const chunk of chunks) {
 
-          // Skip already embedded chunks
-          if (
-            existingIds.has(chunk.id)
-          ) {
+          try {
+
+            const embedding =
+              await generateEmbedding(
+                chunk.content
+              );
+
+            // Delay to avoid rate limits
+            await new Promise(
+              (resolve) =>
+                setTimeout(resolve, 2000)
+            );
+
+            const document: VectorDocument = {
+              ...chunk,
+              embedding,
+            };
+
+            documents.push(document);
+
+            fileChunkCount++;
+            embeddedCount++;
 
             console.log(
-              "Skipping existing chunk:",
-              chunk.id
+              `[${file.name}] Chunk ${fileChunkCount}/${totalChunks} embedded`
             );
 
+            console.log(
+              `Global embedded chunks: ${embeddedCount}`
+            );
+
+          } catch (embeddingError: any) {
+
+            console.error(
+              `Embedding failed for chunk ${chunk.id}`
+            );
+
+            console.error(
+              embeddingError?.message
+            );
+
+            // Continue ingestion
             continue;
           }
-
-          // Generate embedding
-          const embedding =
-            await generateEmbedding(
-              chunk.content
-            );
-
-          // Delay to avoid rate limits
-          await new Promise(
-            (resolve) =>
-              setTimeout(resolve, 4000)
-          );
-
-          const document = {
-            ...chunk,
-            embedding,
-          };
-
-          documents.push(document);
-
-          // 5. Persist vector docs
-          addDocuments([document]);
-
-          fileChunkCount++;
-          embeddedCount++;
-
-          console.log(
-            `[${file.name}] Chunk ${fileChunkCount}/${totalChunks} embedded`
-          );
-
-          console.log(
-            `Global embedded chunks: ${embeddedCount}`
-          );
-
-          console.log(
-            "Chunk embedded:",
-            chunk.id
-          );
         }
+
+        // 5. Save vector file
+        saveVectorFile(
+          folder.folder,
+          file.name,
+          documents
+        );
+
+        console.log(
+          "SAVED VECTOR FILE:",
+          file.name
+        );
 
         console.log(
           `Finished ingesting ${file.name}`
         );
+
+        processedFiles++;
       }
     }
 
+    console.log(
+      "\n=============================="
+    );
+
+    console.log(
+      "INGESTION COMPLETED"
+    );
+
+    console.log(
+      `Processed files: ${processedFiles}`
+    );
+
+    console.log(
+      `Skipped files: ${skippedFiles}`
+    );
+
+    console.log(
+      `Embedded chunks: ${embeddedCount}`
+    );
 
     return NextResponse.json({
       success: true,
 
-      totalDocuments:
-        documents.length,
+      processedFiles,
 
-      embeddedCount,
+      skippedFiles,
+
+      embeddedChunks:
+        embeddedCount,
+
+      message:
+        "Ingestion completed",
     });
 
   } catch (error: any) {
