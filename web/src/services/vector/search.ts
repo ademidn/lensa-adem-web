@@ -4,8 +4,8 @@ import { generateEmbedding }
 import { cosineSimilarity }
   from "./cosine";
 
-import { getAllDocuments }
-  from "./memory-store";
+import { loadAllVectors }
+  from "./load-all";
 
 export async function searchDocuments(
   query: string,
@@ -15,7 +15,7 @@ export async function searchDocuments(
   const queryEmbedding =
     await generateEmbedding(query);
 
-  const documents = getAllDocuments();
+  const documents = loadAllVectors();
 
   const scored = documents.map((doc) => ({
     ...doc,
