@@ -1,74 +1,46 @@
 import { RegulationChunk } from "./types";
 
-import { splitByLegalSections } from "./legal-split";
+type ChunkInput = {
+  text: string;
+  fileId: string;
+  fileName: string;
+  regulationType: string;
+};
 
-interface ChunkOptions {
-  chunkSize?: number;
-}
+export function chunkLegalText({
+  text,
+  fileId,
+  fileName,
+  regulationType,
+}: ChunkInput): RegulationChunk[] {
 
-export function chunkLegalText(
-  text: string,
-  metadata: {
-    fileId: string;
-    fileName: string;
-    regulationType?: string;
-  },
-  options: ChunkOptions = {}
-): RegulationChunk[] {
-  const sections =
-    splitByLegalSections(text);
+  const chunkSize = 1500;
 
-  const chunkSize =
-    options.chunkSize || 2000;
+  const overlap = 200;
 
   const chunks: RegulationChunk[] = [];
 
-  let chunkIndex = 0;
+  for (
+    let i = 0;
+    i < text.length;
+    i += chunkSize - overlap
+  ) {
 
-  for (const section of sections) {
-    if (section.length <= chunkSize) {
-      chunks.push({
-        id: `${metadata.fileId}_${chunkIndex}`,
+    const content =
+      text.slice(i, i + chunkSize);
 
-        content: section,
+    chunks.push({
+      id: `${fileId}_${chunks.length}`,
 
-        metadata: {
-          ...metadata,
-          chunkIndex,
-        },
-      });
+      content,
 
-      chunkIndex++;
-
-      continue;
-    }
-
-    let start = 0;
-
-    while (start < section.length) {
-      const end = Math.min(
-        start + chunkSize,
-        section.length
-      );
-
-      const content =
-        section.slice(start, end);
-
-      chunks.push({
-        id: `${metadata.fileId}_${chunkIndex}`,
-
-        content,
-
-        metadata: {
-          ...metadata,
-          chunkIndex,
-        },
-      });
-
-      start += chunkSize;
-
-      chunkIndex++;
-    }
+      metadata: {
+        fileId,
+        fileName,
+        regulationType,
+        chunkIndex: chunks.length,
+      },
+    });
   }
 
   return chunks;
