@@ -16,6 +16,7 @@ import { generateEmbedding }
 
 import {
   addDocuments,
+  getDocuments,
   VectorDocument,
 } from "@/services/vector/memory-store";
 
@@ -32,6 +33,14 @@ export async function GET() {
       );
 
     const documents: VectorDocument[] = [];
+
+    const existingDocs = getDocuments();
+
+    const existingIds = new Set(
+        existingDocs.map((d) => d.id)
+    );
+
+    let embeddedCount = 0;
 
     for (const folder of folders) {
 
@@ -66,6 +75,15 @@ export async function GET() {
 
         // 4. Generate embeddings
         for (const chunk of chunks) {
+          if (existingIds.has(chunk.id)) {
+            
+            console.log(
+                "Skipping existing chunk:",
+                chunk.id
+            );
+
+            continue;
+          }  
 
           const embedding =
             await generateEmbedding(
@@ -73,13 +91,19 @@ export async function GET() {
             );
 
             await new Promise((resolve) =>
-              setTimeout(resolve, 2000)
+              setTimeout(resolve, 4000)
             );
 
           documents.push({
             ...chunk,
             embedding,
           });
+
+          embeddedCount++;
+
+          console.log(
+            `Embedded ${embeddedCount} chunks`
+          );
 
           console.log(
             "Chunk embedded:",
