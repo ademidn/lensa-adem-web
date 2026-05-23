@@ -1,43 +1,100 @@
-import { NextResponse } from "next/server";
+import { NextResponse }
+  from "next/server";
 
 import {
   listAllRegulationFiles,
   downloadPdf,
 } from "@/services/drive/files";
 
-import { extractPdfText }
-  from "@/services/retrieval/extract";
+import {
+  extractPdfText
+} from "@/services/retrieval/extract";
 
-import { chunkLegalText }
-  from "@/services/retrieval/chunk";
+import {
+  chunkLegalText
+} from "@/services/retrieval/chunk";
 
-import { generateEmbedding }
-  from "@/services/embedding/embed";
+import {
+  generateEmbedding
+} from "@/services/embedding/embed";
 
-import { VectorDocument }
-  from "@/services/vector/memory-store";
+import {
+  VectorDocument
+} from "@/services/vector/memory-store";
 
 import {
   ensureVectorDirs,
   saveVectorFile,
+  loadVectorFile,
   vectorFileExists,
+  saveFailedChunks,
 } from "@/services/vector/file-store";
 
 const ROOT_FOLDER_ID =
-  process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID!;
+  process.env
+    .GOOGLE_DRIVE_ROOT_FOLDER_ID!;
+
+function sleep(ms: number) {
+  return new Promise(
+    (resolve) =>
+      setTimeout(resolve, ms)
+  );
+}
+
+async function generateEmbeddingWithRetry(
+  text: string,
+  retries = 2
+) {
+
+  for (
+    let attempt = 1;
+    attempt <= retries;
+    attempt++
+  ) {
+
+    try {
+
+      return await generateEmbedding(
+        text
+      );
+
+    } catch (error) {
+
+      console.log(
+        `Embedding failed (attempt ${attempt})`
+      );
+
+      if (attempt === retries) {
+        throw error;
+      }
+
+      const delay =
+        attempt * 5000;
+
+      console.log(
+        `Retrying in ${delay}ms`
+      );
+
+      await sleep(delay);
+    }
+  }
+
+  throw new Error(
+    "Embedding failed after retries"
+  );
+}
 
 export async function GET() {
 
   try {
 
-    // Ensure vector directories exist
     ensureVectorDirs();
 
-    let embeddedCount = 0;
-    let processedFiles = 0;
-    let skippedFiles = 0;
+    let globalEmbedded = 0;
+    let globalFailed = 0;
 
-    // Get all regulation folders + files
+    let consecutiveFailures = 0;
+
     const folders =
       await listAllRegulationFiles(
         ROOT_FOLDER_ID
@@ -47,34 +104,15 @@ export async function GET() {
 
       for (const file of folder.files) {
 
-        if (!file.id || !file.name) {
-          continue;
-        }
-
-        // Skip already ingested files
         if (
-          vectorFileExists(
-            folder.folder,
-            file.name
-          )
+          !file.id ||
+          !file.name
         ) {
-
-          skippedFiles++;
-
-          console.log(
-            "\n=============================="
-          );
-
-          console.log(
-            "SKIPPING:",
-            file.name
-          );
-
           continue;
         }
 
         console.log(
-          "\n=============================="
+          "\n=========================="
         );
 
         console.log(
@@ -82,19 +120,51 @@ export async function GET() {
           file.name
         );
 
-        const documents: VectorDocument[] = [];
+        let documents:
+          VectorDocument[] = [];
 
-        // 1. Download PDF
+        // Resume existing vector file
+        if (
+          vectorFileExists(
+            folder.folder,
+            file.name
+          )
+        ) {
+
+          documents =
+            loadVectorFile(
+              folder.folder,
+              file.name
+            );
+
+          console.log(
+            `Loaded existing vectors: ${documents.length}`
+          );
+        }
+
+        const existingIds =
+          new Set(
+            documents.map(
+              (d) => d.id
+            )
+          );
+
+        const failedChunks: any[] =
+          [];
+
+        // Download PDF
         const pdfBuffer =
-          await downloadPdf(file.id);
+          await downloadPdf(
+            file.id
+          );
 
-        // 2. Extract text
+        // Extract text
         const text =
           await extractPdfText(
             pdfBuffer
           );
 
-        // 3. Create chunks
+        // Create chunks
         const chunks =
           chunkLegalText({
             text,
@@ -104,116 +174,122 @@ export async function GET() {
               folder.folder || "unknown",
           });
 
-        const totalChunks =
-          chunks.length;
-
         console.log(
-          `Total chunks: ${totalChunks}`
+          `Total chunks: ${chunks.length}`
         );
 
-        let fileChunkCount = 0;
+        let fileEmbedded = 0;
 
-        // 4. Generate embeddings
         for (const chunk of chunks) {
+
+          // Skip existing chunk
+          if (
+            existingIds.has(
+              chunk.id
+            )
+          ) {
+
+            console.log(
+              `Skipping existing chunk: ${chunk.id}`
+            );
+
+            continue;
+          }
 
           try {
 
             const embedding =
-              await generateEmbedding(
+              await generateEmbeddingWithRetry(
                 chunk.content
               );
 
-            // Delay to avoid rate limits
-            await new Promise(
-              (resolve) =>
-                setTimeout(resolve, 2000)
-            );
-
-            const document: VectorDocument = {
+            const document = {
               ...chunk,
               embedding,
             };
 
-            documents.push(document);
+            documents.push(
+              document
+            );
 
-            fileChunkCount++;
-            embeddedCount++;
+            // Save immediately
+            saveVectorFile(
+              folder.folder,
+              file.name,
+              documents
+            );
+
+            fileEmbedded++;
+            globalEmbedded++;
+
+            consecutiveFailures = 0;
 
             console.log(
-              `[${file.name}] Chunk ${fileChunkCount}/${totalChunks} embedded`
+              `[${file.name}] Chunk ${fileEmbedded}/${chunks.length} embedded`
             );
 
             console.log(
-              `Global embedded chunks: ${embeddedCount}`
+              `Global embedded: ${globalEmbedded}`
             );
 
-          } catch (embeddingError: any) {
+            // Delay between requests
+            await sleep(7000);
 
-            console.error(
-              `Embedding failed for chunk ${chunk.id}`
+          } catch (error) {
+
+            console.log(
+              `FAILED chunk: ${chunk.id}`
             );
 
-            console.error(
-              embeddingError?.message
+            failedChunks.push(
+              chunk
             );
 
-            // Continue ingestion
-            continue;
+            globalFailed++;
+            consecutiveFailures++;
+
+            // Cooldown
+            if (
+              consecutiveFailures >= 3
+            ) {
+
+              console.log(
+                "Too many failures. Cooling down for 60s..."
+              );
+
+              await sleep(60000);
+
+              consecutiveFailures = 0;
+            }
           }
         }
 
-        // 5. Save vector file
-        saveVectorFile(
-          folder.folder,
-          file.name,
-          documents
-        );
+        // Save failed chunks
+        if (
+          failedChunks.length > 0
+        ) {
+
+          saveFailedChunks(
+            folder.folder,
+            file.name,
+            failedChunks
+          );
+
+          console.log(
+            `Saved failed chunks: ${failedChunks.length}`
+          );
+        }
 
         console.log(
-          "SAVED VECTOR FILE:",
-          file.name
+          `Finished: ${file.name}`
         );
-
-        console.log(
-          `Finished ingesting ${file.name}`
-        );
-
-        processedFiles++;
       }
     }
 
-    console.log(
-      "\n=============================="
-    );
-
-    console.log(
-      "INGESTION COMPLETED"
-    );
-
-    console.log(
-      `Processed files: ${processedFiles}`
-    );
-
-    console.log(
-      `Skipped files: ${skippedFiles}`
-    );
-
-    console.log(
-      `Embedded chunks: ${embeddedCount}`
-    );
-
     return NextResponse.json({
       success: true,
-
-      processedFiles,
-
-      skippedFiles,
-
-      embeddedChunks:
-        embeddedCount,
-
-      message:
-        "Ingestion completed",
+      embedded: globalEmbedded,
+      failed: globalFailed,
     });
 
   } catch (error: any) {
@@ -222,7 +298,6 @@ export async function GET() {
 
     return NextResponse.json({
       success: false,
-
       error:
         error?.message ||
         "Unknown error",
