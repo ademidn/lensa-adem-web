@@ -28,6 +28,7 @@ import {
   loadVectorFile,
   vectorFileExists,
   saveFailedChunks,
+  loadFailedChunks,
 } from "@/services/vector/file-store";
 
 const ROOT_FOLDER_ID =
@@ -149,20 +150,26 @@ export async function GET() {
             )
           );
 
+        const failedChunkIds =
+          new Set(
+            loadFailedChunks(
+              folder.folder,
+              file.name
+            ).map(
+              (chunk: any) => chunk.id
+            )
+          );
+
         const failedChunks: any[] =
           [];
 
         // Download PDF
         const pdfBuffer =
-          await downloadPdf(
-            file.id
-          );
+          await downloadPdf(file.id);
 
         // Extract text
         const text =
-          await extractPdfText(
-            pdfBuffer
-          );
+          await extractPdfText(pdfBuffer);
 
         // Create chunks
         const chunks =
@@ -178,6 +185,18 @@ export async function GET() {
           `Total chunks: ${chunks.length}`
         );
 
+        // FULLY COMPLETED FILE CHECK
+        if (
+          documents.length >= chunks.length
+        ) {
+
+          console.log(
+            `Skipping completed file: ${file.name}`
+          );
+
+          continue;
+        }
+
         let fileEmbedded = 0;
 
         for (const chunk of chunks) {
@@ -191,6 +210,20 @@ export async function GET() {
 
             console.log(
               `Skipping existing chunk: ${chunk.id}`
+            );
+
+            continue;
+          }
+
+          // Skip permanently failed chunk
+          if (
+            failedChunkIds.has(
+              chunk.id
+            )
+          ) {
+
+            console.log(
+              `Skipping failed chunk: ${chunk.id}`
             );
 
             continue;
@@ -219,13 +252,27 @@ export async function GET() {
               documents
             );
 
+            // Force garbage collection hint
+            if (documents.length % 50 === 0) {
+
+              console.log(
+                "Checkpoint save completed"
+              );
+            }
+
             fileEmbedded++;
             globalEmbedded++;
 
             consecutiveFailures = 0;
 
+            const progress =
+              (
+                (fileEmbedded / chunks.length)
+                * 100
+              ).toFixed(1);
+
             console.log(
-              `[${file.name}] Chunk ${fileEmbedded}/${chunks.length} embedded`
+              `[${file.name}] ${progress}% (${fileEmbedded}/${chunks.length})`
             );
 
             console.log(
@@ -233,7 +280,10 @@ export async function GET() {
             );
 
             // Delay between requests
-            await sleep(7000);
+            const requestDelay =
+              12000 + Math.random() * 3000;
+
+            await sleep(requestDelay);
 
           } catch (error) {
 
@@ -245,12 +295,19 @@ export async function GET() {
               chunk
             );
 
+            // SAVE FAILED CHUNKS IMMEDIATELY
+            saveFailedChunks(
+              folder.folder,
+              file.name,
+              failedChunks
+            );
+
             globalFailed++;
             consecutiveFailures++;
 
             // Cooldown
             if (
-              consecutiveFailures >= 3
+              consecutiveFailures >= 2
             ) {
 
               console.log(
@@ -283,6 +340,12 @@ export async function GET() {
         console.log(
           `Finished: ${file.name}`
         );
+
+        console.log(
+          "Cooling down before next file..."
+        );
+
+        await sleep(30000);
       }
     }
 
@@ -290,6 +353,7 @@ export async function GET() {
       success: true,
       embedded: globalEmbedded,
       failed: globalFailed,
+      duration: Date.now() - startTime,
     });
 
   } catch (error: any) {
