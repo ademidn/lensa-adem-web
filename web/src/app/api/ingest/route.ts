@@ -20,7 +20,7 @@ import {
 } from "@/services/vector/memory-store";
 
 const ROOT_FOLDER_ID =
-  process.env.GDRIVE_ROOT_FOLDER_ID!;
+  process.env.GOOGLE_DRIVE_ROOT_FOLDER_ID!;
 
 export async function GET() {
 
