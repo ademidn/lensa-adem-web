@@ -9,7 +9,7 @@ export async function generateEmbedding(
     await genAI.models.embedContent({
 
       model:
-        "gemini-embedding-002",
+        "gemini-embedding-2",
 
       contents: text,
     });
