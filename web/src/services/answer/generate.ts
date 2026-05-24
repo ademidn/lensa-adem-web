@@ -6,7 +6,7 @@
 import { genAI } from "../embedding/client";
 import { SearchResult } from "../vector/search";
  
-const MODEL = "gemini-2.0-flash";
+const MODEL = "gemini-2.5-flash";
  
 // ─── Citation shape ───────────────────────────────────────
 export interface Citation {
