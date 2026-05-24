@@ -45,7 +45,7 @@ const BATCH_SIZE = 5;
 // Set this to the exact fileName you want to test.
 // Example: "permenLH_75_2019_epr.pdf"
 // Leave empty ("") to use the first file found in Drive.
-const TEST_FILE_NAME = "permenLH_75_2019_epr.pdf";
+const TEST_FILE_NAME = "uu_18_2008_pengelolaan_sampah.pdf";
 // ─────────────────────────────────────────────────────────
 
 function sleep(ms: number) {
