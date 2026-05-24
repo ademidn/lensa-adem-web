@@ -2,8 +2,8 @@ import { genAI }
   from "./client";
 
 export async function generateEmbedding(
-  text: string
-): Promise<number[]> {
+  texts: string[]
+): Promise<number[][]> {
 
   const response =
     await genAI.models.embedContent({
@@ -11,9 +11,10 @@ export async function generateEmbedding(
       model:
         "gemini-embedding-001",
 
-      contents: text,
+      contents: texts,
     });
 
-  return response.embeddings?.[0]
-    ?.values || [];
+  return response.embeddings.map(
+    (e: any) => e.values
+  );
 }
