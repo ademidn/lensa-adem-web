@@ -2,8 +2,15 @@ export function splitByLegalSections(
   text: string
 ): string[] {
 
+  // Normalize whitespace
+  const normalized =
+    text
+      .replace(/\r/g, "")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n");
+
   // split by Pasal
-  const sections = text.split(
+  const sections = normalized.split(
     /\n\s*(?=Pasal\s+\d+\s*$)/gm
   );
 
