@@ -1,134 +1,93 @@
-// src/services/vector/load-all.ts
+// src/services/vector/vector-store.ts
 //
-// Loads all vector JSON files from disk
-// into memory. Scans recursively through
-// subdirectories so the structure:
+// In-memory vector store with startup loader.
+// Loads all vectors from disk ONCE at startup
+// and keeps them in memory for fast search.
 //
-//   /data/vectors/permen/file.json
-//   /data/vectors/uu/file.json
-//   /data/vectors/perpres/file.json
-//
-// is fully covered.
-//
-// Called once at startup via vector-store.ts
-// NOT on every search request.
+// This replaces the old memory-store.ts
+// single-file architecture.
 
-import fs from "fs";
-import path from "path";
+import { loadAllVectors }
+  from "./load-all";
 
 import { VectorDocument }
   from "./memory-store";
 
-const VECTOR_DIR = path.join(
-  process.cwd(),
-  "data",
-  "vectors"
-);
+// ─── In-memory cache ──────────────────────────────────────
+let cachedDocuments:
+  VectorDocument[] | null = null;
 
-// ─── Recursive file collector ─────────────────────────────
-// Returns all .json file paths under
-// a given directory at any depth.
-function collectJsonFiles(
-  dir: string
-): string[] {
-
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
-
-  const entries =
-    fs.readdirSync(dir, {
-      withFileTypes: true,
-    });
-
-  const filePaths: string[] = [];
-
-  for (const entry of entries) {
-
-    const fullPath =
-      path.join(dir, entry.name);
-
-    if (entry.isDirectory()) {
-
-      // Recurse into subdirectory
-      filePaths.push(
-        ...collectJsonFiles(fullPath)
-      );
-
-    } else if (
-      entry.isFile() &&
-      entry.name.endsWith(".json") &&
-      !entry.name.endsWith(".tmp")
-    ) {
-
-      filePaths.push(fullPath);
-    }
-  }
-
-  return filePaths;
-}
-
-// ─── Main loader ──────────────────────────────────────────
-export function loadAllVectors():
+// ─── Get all documents ────────────────────────────────────
+// Loads from disk on first call,
+// returns cached copy on subsequent calls.
+export function getAllDocuments():
   VectorDocument[] {
 
-  const jsonFiles =
-    collectJsonFiles(VECTOR_DIR);
-
-  if (jsonFiles.length === 0) {
-
-    console.warn(
-      "loadAllVectors: No vector files found in",
-      VECTOR_DIR
-    );
-
-    return [];
-  }
-
-  const allDocuments: VectorDocument[] =
-    [];
-
-  for (const filePath of jsonFiles) {
-
-    try {
-
-      const raw = fs.readFileSync(
-        filePath,
-        "utf-8"
-      );
-
-      const documents =
-        JSON.parse(raw) as VectorDocument[];
-
-      if (!Array.isArray(documents)) {
-
-        console.warn(
-          `Skipping malformed file: ${filePath}`
-        );
-
-        continue;
-      }
-
-      allDocuments.push(...documents);
-
-      console.log(
-        `Loaded ${documents.length} vectors from ${path.basename(filePath)}`
-      );
-
-    } catch (error) {
-
-      // Skip corrupted files without
-      // crashing the entire load
-      console.error(
-        `Failed to load vector file: ${filePath}`,
-        error
-      );
-    }
+  if (cachedDocuments !== null) {
+    return cachedDocuments;
   }
 
   console.log(
-    `Total vectors loaded: ${allDocuments.length}`
+    "Vector store: loading from disk..."
   );
 
-  return allDocuments;
+  cachedDocuments = loadAllVectors();
+
+  console.log(
+    `Vector store: ${cachedDocuments.length} documents cached`
+  );
+
+  return cachedDocuments;
+}
+
+// ─── Invalidate cache ─────────────────────────────────────
+// Call this after new vectors are ingested
+// so the next search reloads from disk.
+export function invalidateCache() {
+
+  cachedDocuments = null;
+
+  console.log(
+    "Vector store: cache invalidated"
+  );
+}
+
+// ─── Get documents by regulation type ────────────────────
+// Filters cached documents by regulationType
+// without reloading from disk.
+export function getDocumentsByType(
+  regulationType: string
+): VectorDocument[] {
+
+  return getAllDocuments().filter(
+    (doc) =>
+      doc.metadata.regulationType
+        ?.toLowerCase() ===
+      regulationType.toLowerCase()
+  );
+}
+
+// ─── Get store stats ──────────────────────────────────────
+// Useful for debug endpoints.
+export function getStoreStats() {
+
+  const docs = getAllDocuments();
+
+  const byType: Record<string, number> =
+    {};
+
+  for (const doc of docs) {
+
+    const type =
+      doc.metadata.regulationType ??
+      "unknown";
+
+    byType[type] =
+      (byType[type] ?? 0) + 1;
+  }
+
+  return {
+    totalDocuments: docs.length,
+    byRegulationType: byType,
+  };
 }
