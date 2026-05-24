@@ -2,7 +2,7 @@ import { genAI }
   from "./client";
 
 const MODEL =
-  "gemini-embedding-001";
+  "gemini-embedding-2";
 
 // SINGLE EMBEDDING
 export async function generateEmbedding(
