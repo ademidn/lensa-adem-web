@@ -99,10 +99,10 @@ interface FileResult {
   fileName: string;
   regulationType: string;
   status:
-    | "completed"
-    | "partial"
-    | "skipped"
-    | "failed";
+  | "completed"
+  | "partial"
+  | "skipped"
+  | "failed";
   totalChunks: number;
   embeddedChunks: number;
   failedChunks: number;
@@ -501,8 +501,8 @@ export async function GET() {
         failedChunks.length === 0
           ? "completed"
           : processedChunks > 0
-          ? "partial"
-          : "failed";
+            ? "partial"
+            : "failed";
 
       fileResults.push({
         fileName: file.name,
