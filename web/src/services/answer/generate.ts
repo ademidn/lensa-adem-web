@@ -126,8 +126,8 @@ Panduan gaya penulisan:
   atau prosedur yang memang berurutan secara logis.
 - Sisipkan nomor sitasi [1], [2] secara alami di akhir kalimat yang relevan —
   bukan dikelompokkan di akhir paragraf.
-- Jika informasi tidak tersedia dalam kutipan regulasi, sampaikan dengan satu
-  kalimat singkat di akhir jawaban — bukan sebagai pembuka atau disclaimer.
+- Jika informasi tidak tersedia dalam kutipan regulasi, sampaikan dengan penjelasan
+  singkat di awal jawaban sebagai disclaimer.
 - Hindari frasa: "konteks regulasi", "berdasarkan konteks", "chunk", "dokumen
   yang diberikan", "regulasi yang Anda berikan".
 - Gunakan kalimat aktif. Hindari konstruksi pasif yang berlebihan.
