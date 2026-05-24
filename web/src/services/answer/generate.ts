@@ -109,8 +109,7 @@ function buildCitations(
 // ─── System prompt ────────────────────────────────────────
 const SYSTEM_PROMPT = `Anda adalah konsultan hukum lingkungan hidup Indonesia yang berpengalaman.
 Jawab pertanyaan pengguna secara langsung, lugas, dan profesional —
-seperti seorang ahli yang berbicara kepada klien, bukan seperti sistem
-yang melaporkan hasil pencarian.
+seperti seorang ahli yang berbicara kepada klien, bukan seperti sistem yang melaporkan hasil pencarian.
 
 ATURAN WAJIB — sumber regulasi:
 Kutipan regulasi di bawah diambil secara otomatis dari basis data internal.
