@@ -14,6 +14,10 @@ export async function generateEmbedding(
       contents: texts,
     });
 
+  console.log(
+    JSON.stringify(response, null, 2)
+  );
+
   return response.embeddings.map(
     (e: any) => e.values
   );
