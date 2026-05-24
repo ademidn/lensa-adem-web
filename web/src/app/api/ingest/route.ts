@@ -15,8 +15,12 @@ import {
 } from "@/services/retrieval/chunk";
 
 import {
-  generateEmbedding
+  generateEmbeddings
 } from "@/services/embedding/embed";
+
+import {
+  batchArray
+} from "@/services/embedding/batch";
 
 import {
   VectorDocument
@@ -35,17 +39,20 @@ const ROOT_FOLDER_ID =
   process.env
     .GOOGLE_DRIVE_ROOT_FOLDER_ID!;
 
+const BATCH_SIZE = 5;
+
 function sleep(ms: number) {
+
   return new Promise(
     (resolve) =>
       setTimeout(resolve, ms)
   );
 }
 
-async function generateEmbeddingWithRetry(
-  text: string,
+async function generateBatchWithRetry(
+  texts: string[],
   retries = 3
-) {
+): Promise<number[][]> {
 
   for (
     let attempt = 1;
@@ -55,14 +62,14 @@ async function generateEmbeddingWithRetry(
 
     try {
 
-      return await generateEmbedding(
-        text
+      return await generateEmbeddings(
+        texts
       );
 
     } catch (error) {
 
       console.log(
-        `Embedding failed (attempt ${attempt})`
+        `Batch embedding failed (attempt ${attempt})`
       );
 
       if (attempt === retries) {
@@ -70,10 +77,10 @@ async function generateEmbeddingWithRetry(
       }
 
       const delay =
-        attempt * 5000;
+        attempt * 10000;
 
       console.log(
-        `Retrying in ${delay}ms`
+        `Retrying batch in ${delay}ms`
       );
 
       await sleep(delay);
@@ -81,17 +88,21 @@ async function generateEmbeddingWithRetry(
   }
 
   throw new Error(
-    "Embedding failed after retries"
+    "Batch embedding failed"
   );
 }
 
 export async function GET() {
+
+  const startTime =
+    Date.now();
 
   try {
 
     ensureVectorDirs();
 
     let globalEmbedded = 0;
+
     let globalFailed = 0;
 
     let consecutiveFailures = 0;
@@ -124,7 +135,7 @@ export async function GET() {
         let documents:
           VectorDocument[] = [];
 
-        // Resume existing vector file
+        // Resume existing vectors
         if (
           vectorFileExists(
             folder.folder,
@@ -156,22 +167,27 @@ export async function GET() {
               folder.folder,
               file.name
             ).map(
-              (chunk: any) => chunk.id
+              (chunk: any) =>
+                chunk.id
             )
           );
 
         const failedChunks: any[] =
           [];
 
-        // Download PDF
+        // DOWNLOAD PDF
         const pdfBuffer =
-          await downloadPdf(file.id);
+          await downloadPdf(
+            file.id
+          );
 
-        // Extract text
+        // EXTRACT TEXT
         const text =
-          await extractPdfText(pdfBuffer);
+          await extractPdfText(
+            pdfBuffer
+          );
 
-        // Create chunks
+        // CREATE CHUNKS
         const chunks =
           chunkLegalText({
             text,
@@ -185,9 +201,10 @@ export async function GET() {
           `Total chunks: ${chunks.length}`
         );
 
-        // FULLY COMPLETED FILE CHECK
+        // SKIP COMPLETED FILE
         if (
-          documents.length >= chunks.length
+          documents.length >=
+          chunks.length
         ) {
 
           console.log(
@@ -197,146 +214,208 @@ export async function GET() {
           continue;
         }
 
-        let fileEmbedded = 0;
+        // FILTER PENDING CHUNKS
+        const pendingChunks =
+          chunks.filter((chunk) => {
 
-        let fileFailed = 0;
+            // Skip embedded
+            if (
+              existingIds.has(
+                chunk.id
+              )
+            ) {
+              return false;
+            }
 
-        for (const chunk of chunks) {
+            // Skip permanently failed
+            if (
+              failedChunkIds.has(
+                chunk.id
+              )
+            ) {
+              return false;
+            }
 
-          // Skip existing chunk
-          if (
-            existingIds.has(
-              chunk.id
-            )
-          ) {
+            // Skip garbage chunks
+            if (
+              chunk.content
+                .trim()
+                .length < 100
+            ) {
 
-            console.log(
-              `Skipping existing chunk: ${chunk.id}`
-            );
+              console.log(
+                `Skipping small chunk: ${chunk.id}`
+              );
 
-            continue;
-          }
+              return false;
+            }
 
-          // Skip permanently failed chunk
-          if (
-            failedChunkIds.has(
-              chunk.id
-            )
-          ) {
+            return true;
+          });
 
-            console.log(
-              `Skipping failed chunk: ${chunk.id}`
-            );
+        console.log(
+          `Pending chunks: ${pendingChunks.length}`
+        );
 
-            continue;
-          }
+        // CREATE BATCHES
+        const batches =
+          batchArray(
+            pendingChunks,
+            BATCH_SIZE
+          );
+
+        console.log(
+          `Total batches: ${batches.length}`
+        );
+
+        let processedChunks = 0;
+
+        for (
+          let batchIndex = 0;
+          batchIndex < batches.length;
+          batchIndex++
+        ) {
+
+          const batch =
+            batches[batchIndex];
 
           try {
 
-            const embedding =
-              await generateEmbeddingWithRetry(
-                chunk.content
+            const texts =
+              batch.map(
+                (chunk) =>
+                  chunk.content
               );
 
-            const document = {
-              ...chunk,
-              embedding,
-            };
+            // GENERATE EMBEDDINGS
+            const embeddings =
+              await generateBatchWithRetry(
+                texts
+              );
 
-            documents.push(
-              document
-            );
+            for (
+              let i = 0;
+              i < batch.length;
+              i++
+            ) {
 
-            // Save immediately
+              const chunk =
+                batch[i];
+
+              const embedding =
+                embeddings[i];
+
+              if (!embedding) {
+
+                console.log(
+                  `Missing embedding for ${chunk.id}`
+                );
+
+                failedChunks.push(
+                  chunk
+                );
+
+                continue;
+              }
+
+              const document = {
+                ...chunk,
+                embedding,
+              };
+
+              documents.push(
+                document
+              );
+
+              processedChunks++;
+
+              globalEmbedded++;
+            }
+
+            // SAVE IMMEDIATELY
             saveVectorFile(
               folder.folder,
               file.name,
               documents
             );
 
-            // Force garbage collection hint
-            if (documents.length % 50 === 0) {
-
-              console.log(
-                "Checkpoint save completed"
-              );
-            }
-
-            fileEmbedded++;
-            globalEmbedded++;
-
-            consecutiveFailures = 0;
-
             const progress =
               (
-                (fileEmbedded / chunks.length)
-                * 100
+                (
+                  processedChunks /
+                  pendingChunks.length
+                ) * 100
               ).toFixed(1);
 
             console.log(
-              `[${file.name}] ${progress}% (${fileEmbedded}/${chunks.length})`
+              `[${file.name}] Batch ${
+                batchIndex + 1
+              }/${batches.length}`
+            );
+
+            console.log(
+              `Progress: ${progress}%`
             );
 
             console.log(
               `Global embedded: ${globalEmbedded}`
             );
 
-            // Delay between requests
-            const requestDelay =
-              15000 + Math.random() * 3000;
+            consecutiveFailures = 0;
 
-            await sleep(requestDelay);
+            // COOLDOWN BETWEEN BATCHES
+            const batchDelay =
+              20000 +
+              Math.random() * 5000;
+
+            console.log(
+              `Cooling down ${Math.round(batchDelay / 1000)}s`
+            );
+
+            await sleep(
+              batchDelay
+            );
 
           } catch (error) {
 
             console.log(
-              `FAILED chunk: ${chunk.id}`
+              `FAILED batch ${batchIndex + 1}`
             );
 
             failedChunks.push(
-              chunk
+              ...batch
             );
 
-            fileFailed++;
-
-            // SAVE FAILED CHUNKS IMMEDIATELY
             saveFailedChunks(
               folder.folder,
               file.name,
               failedChunks
             );
 
-            globalFailed++;
+            globalFailed +=
+              batch.length;
+
             consecutiveFailures++;
 
-            // Cooldown
+            // GLOBAL COOLDOWN
             if (
               consecutiveFailures >= 2
             ) {
 
               console.log(
-                "Too many failures. Cooling down for 60s..."
+                "Too many failures. Cooling down 120s..."
               );
 
-              await sleep(60000);
+              await sleep(
+                120000
+              );
 
               consecutiveFailures = 0;
-            }
-
-            // Skip problematic file
-            if (fileFailed >= 10) {
-
-              console.log(
-                `Too many failed chunks for ${file.name}. Skipping remaining chunks.`
-              );
-
-              break;
             }
           }
         }
 
-
-        // Save failed chunks
+        // SAVE FAILED CHUNKS
         if (
           failedChunks.length > 0
         ) {
@@ -360,15 +439,18 @@ export async function GET() {
           "Cooling down before next file..."
         );
 
-        await sleep(120000);
+        await sleep(60000);
       }
     }
 
     return NextResponse.json({
       success: true,
-      embedded: globalEmbedded,
-      failed: globalFailed,
-      duration: Date.now() - startTime,
+      embedded:
+        globalEmbedded,
+      failed:
+        globalFailed,
+      duration:
+        Date.now() - startTime,
     });
 
   } catch (error: any) {
