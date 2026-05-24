@@ -13,9 +13,29 @@ import { loadAllVectors }
 import { VectorDocument }
   from "./memory-store";
 
+// ─── Global singleton ─────────────────────────────────────
+// Module-level `let` is reset on every Next.js
+// hot reload. Attaching to `global` survives
+// route re-evaluation across requests in dev mode.
+declare global {
+  // eslint-disable-next-line no-var
+  var __vectorCache: VectorDocument[] | undefined;
+}
+
 // ─── In-memory cache ──────────────────────────────────────
-let cachedDocuments:
-  VectorDocument[] | null = null;
+// Proxy through global so the reference persists
+// across Next.js module re-evaluations.
+function getCached(): VectorDocument[] | null {
+  return global.__vectorCache ?? null;
+}
+
+function setCached(docs: VectorDocument[]): void {
+  global.__vectorCache = docs;
+}
+
+function clearCached(): void {
+  global.__vectorCache = undefined;
+}
 
 // ─── Get all documents ────────────────────────────────────
 // Loads from disk on first call,
@@ -23,21 +43,24 @@ let cachedDocuments:
 export function getAllDocuments():
   VectorDocument[] {
 
-  if (cachedDocuments !== null) {
-    return cachedDocuments;
+  const cached = getCached();
+
+  if (cached !== null) {
+    return cached;
   }
 
   console.log(
     "Vector store: loading from disk..."
   );
 
-  cachedDocuments = loadAllVectors();
+  const docs = loadAllVectors();
+  setCached(docs);
 
   console.log(
-    `Vector store: ${cachedDocuments.length} documents cached`
+    `Vector store: ${docs.length} documents cached`
   );
 
-  return cachedDocuments;
+  return docs;
 }
 
 // ─── Invalidate cache ─────────────────────────────────────
@@ -45,7 +68,7 @@ export function getAllDocuments():
 // so the next search reloads from disk.
 export function invalidateCache() {
 
-  cachedDocuments = null;
+  clearCached();
 
   console.log(
     "Vector store: cache invalidated"
