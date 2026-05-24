@@ -1,107 +1,104 @@
-import { genAI }
-  from "./client";
+import { genAI } from "./client";
 
-const MODEL =
-  "gemini-embedding-2";
+const MODEL = "gemini-embedding-001";
 
-// SINGLE EMBEDDING
+// ─── Single Embedding ─────────────────────────────────────
 export async function generateEmbedding(
   text: string
 ): Promise<number[]> {
 
   const response =
     await genAI.models.embedContent({
-
       model: MODEL,
-
       contents: text,
     });
 
-  // DEBUG LOG
-  console.log(
-    "Embedding response received"
-  );
-
-  // VALIDATION
   if (
-    !response ||
-    !response.embeddings ||
-    !response.embeddings[0]
+    !response?.embeddings?.[0]?.values
   ) {
-
-    console.error(
-      "Invalid embedding response:",
-      JSON.stringify(
-        response,
-        null,
-        2
-      )
-    );
-
     throw new Error(
-      "Embedding response invalid"
+      "Invalid single embedding response"
     );
   }
 
-  return response
-    .embeddings[0]
-    .values;
+  return response.embeddings[0].values;
 }
 
-// BATCH EMBEDDING
+// ─── Batch Embedding ──────────────────────────────────────
+// NOTE: Gemini embedContent may only return 1 embedding
+// regardless of input count. We validate the count and
+// fall back to sequential if the API behaves that way.
 export async function generateEmbeddings(
   texts: string[]
 ): Promise<number[][]> {
 
-  // SAFETY CHECK
   if (texts.length === 0) {
     return [];
   }
 
+  // Attempt single API call with multiple inputs
   const response =
     await genAI.models.embedContent({
-
       model: MODEL,
-
       contents: texts,
     });
 
-  // DEBUG LOG
-  console.log(
-    `Batch embedding success: ${texts.length} chunks`
-  );
+  const received =
+    response?.embeddings?.length ?? 0;
 
-  // VALIDATION
-  if (
-    !response ||
-    !response.embeddings
-  ) {
+  // ── CRITICAL: Validate count matches input ──
+  if (received !== texts.length) {
 
-    console.error(
-      "Invalid batch embedding response:",
-      JSON.stringify(
-        response,
-        null,
-        2
-      )
+    console.warn(
+      `Embedding count mismatch: sent ${texts.length}, received ${received}. Falling back to sequential.`
     );
 
-    throw new Error(
-      "Batch embedding response invalid"
-    );
+    // Sequential fallback — guaranteed 1:1 mapping
+    return sequentialEmbeddings(texts);
   }
 
+  // Validate each embedding value exists
   return response.embeddings.map(
-    (embedding: any) => {
+    (embedding: any, index: number) => {
 
-      if (!embedding.values) {
-
+      if (!embedding?.values) {
         throw new Error(
-          "Missing embedding values"
+          `Missing embedding values at index ${index}`
         );
       }
 
       return embedding.values;
     }
   );
+}
+
+// ─── Sequential Fallback ──────────────────────────────────
+// Used when batch API does not return correct count.
+// Adds a small delay between requests to avoid rate limits.
+async function sequentialEmbeddings(
+  texts: string[]
+): Promise<number[][]> {
+
+  const results: number[][] = [];
+
+  for (let i = 0; i < texts.length; i++) {
+
+    const embedding =
+      await generateEmbedding(texts[i]);
+
+    results.push(embedding);
+
+    console.log(
+      `Sequential embedding: ${i + 1}/${texts.length}`
+    );
+
+    // Small delay between sequential requests
+    if (i < texts.length - 1) {
+      await new Promise((resolve) =>
+        setTimeout(resolve, 3000)
+      );
+    }
+  }
+
+  return results;
 }
