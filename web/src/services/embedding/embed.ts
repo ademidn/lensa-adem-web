@@ -1,7 +1,7 @@
 import { genAI }
   from "./client";
 
-export async function generateEmbedding(
+export async function generateEmbeddings(
   texts: string[]
 ): Promise<number[][]> {
 
