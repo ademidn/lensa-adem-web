@@ -21,7 +21,7 @@ export function loadAllVectors():
   const files =
     fs.readdirSync(VECTOR_DIR);
 
-  const documents:
+  const allDocuments:
     VectorDocument[] = [];
 
   for (const file of files) {
@@ -39,11 +39,13 @@ export function loadAllVectors():
         "utf-8"
       );
 
-    const parsed =
+    const documents =
       JSON.parse(raw);
 
-    documents.push(...parsed);
+    allDocuments.push(
+      ...documents
+    );
   }
 
-  return documents;
+  return allDocuments;
 }
