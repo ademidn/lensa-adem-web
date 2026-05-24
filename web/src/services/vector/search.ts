@@ -17,14 +17,15 @@ export async function searchDocuments(
 
   const documents = loadAllVectors();
 
-  const scored = documents.map((doc) => ({
-    ...doc,
+  const scored = 
+    documents.map((doc) => ({
+      ...doc,
 
-    score: cosineSimilarity(
-      queryEmbedding,
-      doc.embedding
-    ),
-  }));
+      score: cosineSimilarity(
+        queryEmbedding,
+        doc.embedding
+      ),
+    }));
 
   scored.sort((a, b) => b.score - a.score);
 
