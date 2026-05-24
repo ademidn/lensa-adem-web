@@ -382,6 +382,8 @@ export async function GET() {
               `FAILED batch ${batchIndex + 1}`
             );
 
+            console.error(error);
+
             failedChunks.push(
               ...batch
             );
