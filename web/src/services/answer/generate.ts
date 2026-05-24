@@ -27,9 +27,43 @@ export interface GeneratedAnswer {
   model: string;
 }
 
+// ─── Regulation name formatter ────────────────────────────
+// Converts a raw fileName into a human-readable
+// regulation name the model can cite naturally.
+// e.g. "permenLH_75_2019_epr.json" → "Permen LH No. 75 Tahun 2019"
+function formatRegulationName(
+  fileName: string,
+  regulationType: string
+): string {
+
+  const base = fileName
+    .replace(/\.json$/, "")
+    .replace(/\.pdf$/, "");
+
+  // Try to extract number + year pattern (e.g. _75_2019_)
+  const match = base.match(/_(\d+)_(\d{4})/);
+
+  if (!match) return base.replace(/_/g, " ");
+
+  const number = match[1];
+  const year   = match[2];
+
+  const prefixMap: Record<string, string> = {
+    uu:      `UU No. ${number} Tahun ${year}`,
+    pp:      `PP No. ${number} Tahun ${year}`,
+    permen:  `Permen LH No. ${number} Tahun ${year}`,
+    perpres: `Perpres No. ${number} Tahun ${year}`,
+    perda:   `Perda No. ${number} Tahun ${year}`,
+  };
+
+  return prefixMap[regulationType.toLowerCase()]
+    ?? `Regulasi No. ${number} Tahun ${year}`;
+}
+
 // ─── Build context string from chunks ────────────────────
 // Each chunk gets a numbered reference [1], [2], etc.
-// so Gemini can cite them in its answer.
+// Label includes the human-readable regulation name
+// so Gemini can cite it correctly in prose.
 function buildContext(
   chunks: SearchResult[]
 ): string {
@@ -39,14 +73,19 @@ function buildContext(
 
       const ref = index + 1;
 
-      const source = [
+      const regulationName = formatRegulationName(
         chunk.metadata.fileName,
+        chunk.metadata.regulationType
+      );
+
+      const source = [
+        regulationName,
         chunk.metadata.article,
       ]
         .filter(Boolean)
-        .join(" — ");
+        .join(", ");
 
-      return `[${ref}] ${source}\n${chunk.content}`;
+      return `[${ref}] Sumber: ${source}\n${chunk.content}`;
     })
     .join("\n\n---\n\n");
 }
@@ -68,46 +107,41 @@ function buildCitations(
 }
 
 // ─── System prompt ────────────────────────────────────────
-// Instructs Gemini to answer strictly from
-// provided context and cite sources by number.
-const SYSTEM_PROMPT = `Anda adalah konsultan hukum lingkungan hidup Indonesia yang berpengalaman. 
-Jawab pertanyaan pengguna secara langsung, lugas, dan profesional — 
-seperti seorang ahli yang berbicara kepada klien, bukan seperti sistem 
+const SYSTEM_PROMPT = `Anda adalah konsultan hukum lingkungan hidup Indonesia yang berpengalaman.
+Jawab pertanyaan pengguna secara langsung, lugas, dan profesional —
+seperti seorang ahli yang berbicara kepada klien, bukan seperti sistem
 yang melaporkan hasil pencarian.
 
+ATURAN WAJIB — sumber regulasi:
+Kutipan regulasi di bawah diambil secara otomatis dari basis data internal.
+Pengguna TIDAK menyediakan dokumen ini.
+Jangan pernah menyebut "regulasi yang Anda berikan", "dokumen yang Anda sediakan",
+atau "berdasarkan konteks yang diberikan".
+Sebut regulasi langsung dengan namanya: "menurut Permen LH No. 75 Tahun 2019",
+"UU No. 18 Tahun 2008 mewajibkan...", dan seterusnya.
+
 Panduan gaya penulisan:
-- Mulai langsung dengan substansi jawaban, bukan dengan kalimat pembuka seperti 
-  "Berdasarkan regulasi..." atau "Dalam konteks yang diberikan..."
-- Gunakan paragraf mengalir. Hindari bullet point kecuali untuk penjelasan terkait daftar tertentu 
-  atau prosedur yang memang berurutan.
-- Jika informasi tidak tersedia dalam dokumen, sampaikan dengan singkat di akhir 
-  jawaban — bukan di awal sebagai disclaimer.
+- Mulai langsung dengan substansi jawaban. Jangan awali dengan kalimat basa-basi
+  seperti "Tentu saja" atau "Pertanyaan yang bagus".
+- Gunakan paragraf mengalir. Hindari bullet point kecuali untuk daftar kewajiban
+  atau prosedur yang memang berurutan secara logis.
+- Sisipkan nomor sitasi [1], [2] secara alami di akhir kalimat yang relevan —
+  bukan dikelompokkan di akhir paragraf.
+- Jika informasi tidak tersedia dalam kutipan regulasi, sampaikan dengan satu
+  kalimat singkat di akhir jawaban — bukan sebagai pembuka atau disclaimer.
+- Hindari frasa: "konteks regulasi", "berdasarkan konteks", "chunk", "dokumen
+  yang diberikan", "regulasi yang Anda berikan".
 - Gunakan kalimat aktif. Hindari konstruksi pasif yang berlebihan.
-- Nomor sitasi [1], [2] cukup disisipkan secara alami di akhir kalimat yang relevan, 
-  bukan dikelompokkan.
-- Jangan menyebutkan "konteks regulasi", "chunk", atau istilah teknis sistem.
 
-Contoh gaya yang salah:
-"Berdasarkan konteks regulasi yang dimuat, tidak ada penjelasan eksplisit 
-mengenai alasan mengapa produsen diwajibkan..."
+Contoh yang SALAH:
+"Berdasarkan konteks regulasi yang dimuat, tidak ada penjelasan eksplisit..."
+"Regulasi yang Anda berikan, yaitu Permen LH 75/2019, menjelaskan..."
 
-Contoh gaya yang benar:
-"Kewajiban EPR bagi produsen bertujuan memindahkan tanggung jawab 
-pengelolaan sampah dari pemerintah kepada pihak yang menghasilkan produk. 
-Meski dasar filosofis ini tidak dinyatakan eksplisit dalam Permen LH 75/2019, 
-kewajiban teknisnya diatur secara rinci: produsen wajib mendaur ulang, 
-menyediakan fasilitas penampungan, dan melakukan penarikan sampah [2]."
-
-PENTING: Dokumen regulasi diperoleh secara otomatis dari basis data internal, 
-bukan dari pengguna. Jangan gunakan frasa seperti:
-- "regulasi yang Anda berikan"
-- "berdasarkan dokumen yang Anda sediakan"  
-- "konteks yang diberikan"
-
-Gunakan sebagai gantinya:
-- "berdasarkan [nama regulasi]"
-- "menurut Permen LH 75/2019"
-- "dalam regulasi yang berlaku"`;
+Contoh yang BENAR:
+"Permen LH No. 75 Tahun 2019 mewajibkan produsen untuk mendaur ulang
+dan menyediakan fasilitas penampungan sampah dari produk mereka [2].
+Kewajiban ini bertujuan memindahkan tanggung jawab pengelolaan sampah
+dari pemerintah kepada pihak yang menghasilkan produk."`;
 
 // ─── Main answer generator ────────────────────────────────
 export async function generateAnswer(
@@ -118,22 +152,25 @@ export async function generateAnswer(
   if (chunks.length === 0) {
     return {
       answer:
-        "Maaf, tidak ditemukan informasi yang relevan dalam database regulasi untuk menjawab pertanyaan Anda.",
+        "Maaf, tidak ditemukan informasi yang relevan dalam basis data regulasi untuk pertanyaan ini.",
       citations: [],
       totalChunksUsed: 0,
       model: MODEL,
     };
   }
 
-  const context = buildContext(chunks);
+  const context  = buildContext(chunks);
   const citations = buildCitations(chunks);
 
+  // ── User prompt ──────────────────────────────────────
+  // "Kutipan regulasi" — not "konteks yang diberikan" —
+  // so the model doesn't attribute the source to the user.
   const userPrompt = `Pertanyaan: ${query}
- 
-Konteks Regulasi:
+
+Kutipan regulasi dari basis data internal:
 ${context}
- 
-Berikan jawaban berdasarkan konteks di atas.`;
+
+Jawab pertanyaan di atas berdasarkan kutipan regulasi tersebut.`;
 
   const response =
     await genAI.models.generateContent({
@@ -155,9 +192,7 @@ Berikan jawaban berdasarkan konteks di atas.`;
       ?.parts?.[0]?.text ?? "";
 
   if (!answer) {
-    throw new Error(
-      "Gemini returned empty answer"
-    );
+    throw new Error("Gemini returned empty answer");
   }
 
   return {
