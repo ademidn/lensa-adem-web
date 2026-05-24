@@ -4,15 +4,20 @@ export interface RegulationChunk {
   content: string;
 
   metadata: {
+    // ─── Identity ─────────────────────
     fileId: string;
     fileName: string;
+    regulationType: string;      // required — always known at ingestion
 
-    regulationType?: string;
-
+    // ─── Position ─────────────────────
     chunkIndex: number;
+    totalChunks?: number;        // total chunks in this document
 
-    article?: string;
+    // ─── Legal Structure ──────────────
+    article?: string;            // e.g. "Pasal 6"
+    section?: string;            // e.g. "BAB II"
 
-    page?: number;
+    // ─── Source Traceability ──────────
+    page?: number;               // source PDF page if extractable
   };
 }
