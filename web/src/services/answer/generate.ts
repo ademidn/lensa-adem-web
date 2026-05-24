@@ -2,12 +2,12 @@
 // builds a grounded prompt, sends to Gemini,
 // and returns a structured answer with citations.
 // ─────────────────────────────────────────────────────────
- 
+
 import { genAI } from "../embedding/client";
 import { SearchResult } from "../vector/search";
- 
+
 const MODEL = "gemini-2.5-flash";
- 
+
 // ─── Citation shape ───────────────────────────────────────
 export interface Citation {
   index: number;
@@ -18,7 +18,7 @@ export interface Citation {
   chunkIndex: number;
   preview: string;
 }
- 
+
 // ─── Answer shape ─────────────────────────────────────────
 export interface GeneratedAnswer {
   answer: string;
@@ -26,36 +26,36 @@ export interface GeneratedAnswer {
   totalChunksUsed: number;
   model: string;
 }
- 
+
 // ─── Build context string from chunks ────────────────────
 // Each chunk gets a numbered reference [1], [2], etc.
 // so Gemini can cite them in its answer.
 function buildContext(
   chunks: SearchResult[]
 ): string {
- 
+
   return chunks
     .map((chunk, index) => {
- 
+
       const ref = index + 1;
- 
+
       const source = [
         chunk.metadata.fileName,
         chunk.metadata.article,
       ]
         .filter(Boolean)
         .join(" — ");
- 
+
       return `[${ref}] ${source}\n${chunk.content}`;
     })
     .join("\n\n---\n\n");
 }
- 
+
 // ─── Build citations array ────────────────────────────────
 function buildCitations(
   chunks: SearchResult[]
 ): Citation[] {
- 
+
   return chunks.map((chunk, index) => ({
     index: index + 1,
     fileName: chunk.metadata.fileName,
@@ -66,7 +66,7 @@ function buildCitations(
     preview: chunk.content.slice(0, 200),
   }));
 }
- 
+
 // ─── System prompt ────────────────────────────────────────
 // Instructs Gemini to answer strictly from
 // provided context and cite sources by number.
@@ -79,13 +79,13 @@ Ikuti aturan berikut dengan ketat:
 3. Jika konteks tidak cukup untuk menjawab pertanyaan, nyatakan dengan jelas bahwa informasi tidak tersedia dalam regulasi yang dimuat.
 4. Gunakan bahasa Indonesia yang formal dan mudah dipahami.
 5. Struktur jawaban: ringkasan singkat terlebih dahulu, kemudian penjelasan detail jika diperlukan.`;
- 
+
 // ─── Main answer generator ────────────────────────────────
 export async function generateAnswer(
   query: string,
   chunks: SearchResult[]
 ): Promise<GeneratedAnswer> {
- 
+
   if (chunks.length === 0) {
     return {
       answer:
@@ -95,17 +95,17 @@ export async function generateAnswer(
       model: MODEL,
     };
   }
- 
+
   const context = buildContext(chunks);
   const citations = buildCitations(chunks);
- 
+
   const userPrompt = `Pertanyaan: ${query}
  
 Konteks Regulasi:
 ${context}
  
 Berikan jawaban berdasarkan konteks di atas.`;
- 
+
   const response =
     await genAI.models.generateContent({
       model: MODEL,
@@ -120,17 +120,17 @@ Berikan jawaban berdasarkan konteks di atas.`;
         },
       ],
     });
- 
+
   const answer =
     response.candidates?.[0]?.content
       ?.parts?.[0]?.text ?? "";
- 
+
   if (!answer) {
     throw new Error(
       "Gemini returned empty answer"
     );
   }
- 
+
   return {
     answer,
     citations,
