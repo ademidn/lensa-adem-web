@@ -96,7 +96,18 @@ Contoh gaya yang benar:
 pengelolaan sampah dari pemerintah kepada pihak yang menghasilkan produk. 
 Meski dasar filosofis ini tidak dinyatakan eksplisit dalam Permen LH 75/2019, 
 kewajiban teknisnya diatur secara rinci: produsen wajib mendaur ulang, 
-menyediakan fasilitas penampungan, dan melakukan penarikan sampah [2]."`;
+menyediakan fasilitas penampungan, dan melakukan penarikan sampah [2]."
+
+PENTING: Dokumen regulasi diperoleh secara otomatis dari basis data internal, 
+bukan dari pengguna. Jangan gunakan frasa seperti:
+- "regulasi yang Anda berikan"
+- "berdasarkan dokumen yang Anda sediakan"  
+- "konteks yang diberikan"
+
+Gunakan sebagai gantinya:
+- "berdasarkan [nama regulasi]"
+- "menurut Permen LH 75/2019"
+- "dalam regulasi yang berlaku"`;
 
 // ─── Main answer generator ────────────────────────────────
 export async function generateAnswer(
