@@ -586,3 +586,16 @@ export async function GET() {
     });
   }
 }
+
+// add a call to invalidateCache
+// so new vectors are picked up immediately without restarting the server
+import { invalidateCache }
+  from "@/services/vector/vector-store";
+
+// Inside the return block:
+invalidateCache();
+
+return NextResponse.json({
+  success: true,
+  ...
+});
