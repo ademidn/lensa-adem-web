@@ -35,6 +35,9 @@ import {
   loadFailedChunks,
 } from "@/services/vector/file-store";
 
+import { invalidateCache }
+  from "@/services/vector/vector-store";
+
 const ROOT_FOLDER_ID =
   process.env
     .GOOGLE_DRIVE_ROOT_FOLDER_ID!;
@@ -566,6 +569,10 @@ export async function GET() {
     );
 
     // ── FIX #8: Per-file summary in response
+    // add a call to invalidateCache
+    // so new vectors are picked up immediately without restarting the server
+    invalidateCache();
+
     return NextResponse.json({
       success: true,
       totalEmbedded: globalEmbedded,
@@ -587,13 +594,6 @@ export async function GET() {
   }
 }
 
-// add a call to invalidateCache
-// so new vectors are picked up immediately without restarting the server
-import { invalidateCache }
-  from "@/services/vector/vector-store";
-
-// Inside the return block:
-invalidateCache();
 
 return NextResponse.json({
   success: true,
