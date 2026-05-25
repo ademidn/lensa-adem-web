@@ -11,12 +11,12 @@ export interface RegulationChunk {
 
     // ─── Position ─────────────────────
     chunkIndex: number;
-    totalChunks?: number;        // total chunks in this document
 
     // ─── Legal Structure ──────────────
-    article?: string;            // e.g. "Pasal 6"
-    section?: string;            // e.g. "BAB II"
-
+    bab?: string;               // e.g. "BAB I - Ketentuan Umum"
+    pasal?: string;            // e.g. "Pasal 6"
+    ayat?: string;              // e.g. "(1)", "(2)"
+    
     // ─── Source Traceability ──────────
     page?: number;               // source PDF page if extractable
   };
