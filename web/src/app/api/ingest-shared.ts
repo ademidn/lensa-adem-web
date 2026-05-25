@@ -36,7 +36,7 @@ export const BATCH_SIZE = 5;
 
 // Cooldown between files (ms) — gives the API breathing
 // room when processing multiple documents in sequence.
-export const INTER_FILE_DELAY_MS = 5000;
+export const INTER_FILE_DELAY_MS = 10000;
 
 // Max failed batches before skipping to the next file.
 export const MAX_FAILED_BATCHES = 3;
