@@ -13,8 +13,9 @@ interface Citation {
   index: number;
   fileName: string;
   regulationType: string;
-  article?: string;
-  section?: string;
+  bab?: string;
+  pasal?: string;
+  ayat?: string;
   chunkIndex: number;
   preview: string;
 }
@@ -36,9 +37,9 @@ interface Message {
 
 const SUGGESTIONS = [
   "Apa itu AMDAL dan siapa yang wajib menyusunnya?",
-  "Apa sanksi pelanggaran lingkungan hidup?",
-  "Kewajiban produsen dalam pengelolaan sampah",
-  "Prosedur izin lingkungan untuk industri",
+  "Jelaskan tentang EPR di Indonesia?",
+  "Jelaskan mengenai kewajiban produsen dalam pengelolaan sampah",
+  "Bagimana prosedur pengurusan izin lingkungan untuk industri",
 ];
 
 const REGULATION_TYPES = [
@@ -204,8 +205,11 @@ function CitationCard({ citation }: { citation: Citation }) {
             <span className={`reg-tag ${getTagClass(citation.regulationType)}`}>
               {formatRegTypeShort(citation.regulationType)}
             </span>
-            {citation.article && (
-              <span className="citation-article">{citation.article}</span>
+            {(citation.pasal || citation.bab) && (
+              <span className="citation-article">{[citation.bab, citation.pasal, citation.ayat]
+              .filter(Boolean)
+              .join(" · ")}
+              </span>
             )}
           </div>
           <span className="citation-filename">
