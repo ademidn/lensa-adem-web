@@ -2,29 +2,29 @@
 // ─────────────────────────────────────────────────────────
 
 import { chunkLegalText }
-  from "@/services/retrieval/chunk";
+    from "@/services/retrieval/chunk";
 
 import { extractPdfText }
-  from "@/services/retrieval/extract";
+    from "@/services/retrieval/extract";
 
 import { downloadPdf }
-  from "@/services/drive/files";
+    from "@/services/drive/files";
 
 import { generateEmbeddings }
-  from "@/services/embedding/embed";
+    from "@/services/embedding/embed";
 
 import { batchArray }
-  from "@/services/embedding/batch";
+    from "@/services/embedding/batch";
 
 import { VectorDocument }
-  from "@/services/vector/memory-store";
+    from "@/services/vector/memory-store";
 
 import {
-  saveVectorFile,
-  loadVectorFile,
-  vectorFileExists,
-  saveFailedChunks,
-  loadFailedChunks,
+    saveVectorFile,
+    loadVectorFile,
+    vectorFileExists,
+    saveFailedChunks,
+    loadFailedChunks,
 } from "@/services/vector/file-store";
 
 // ─── Constants ────────────────────────────────────────────
@@ -36,54 +36,54 @@ export const BATCH_SIZE = 5;
 
 // Cooldown between files (ms) — gives the API breathing
 // room when processing multiple documents in sequence.
-export const INTER_FILE_DELAY_MS = 10000;
+export const INTER_FILE_DELAY_MS = 5000;
 
 // Max failed batches before skipping to the next file.
 export const MAX_FAILED_BATCHES = 3;
 
 // ─── Types ────────────────────────────────────────────────
 export interface FileTarget {
-  file: { id: string; name: string };
-  folder: string;
+    file: { id: string; name: string };
+    folder: string;
 }
 
 export interface FileResult {
-  fileName: string;
-  regulationType: string;
-  status: "completed" | "partial" | "skipped" | "failed";
-  totalChunks: number;
-  embeddedChunks: number;
-  failedChunks: number;
-  durationSeconds: number;
+    fileName: string;
+    regulationType: string;
+    status: "completed" | "partial" | "skipped" | "failed";
+    totalChunks: number;
+    embeddedChunks: number;
+    failedChunks: number;
+    durationSeconds: number;
 }
 
 // ─── Helpers ──────────────────────────────────────────────
 export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 // Retries generateEmbeddings up to `retries` times with
 // exponential backoff. Throws on final failure.
 export async function generateBatchWithRetry(
-  texts: string[],
-  retries = 3
+    texts: string[],
+    retries = 3
 ): Promise<number[][]> {
 
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return await generateEmbeddings(texts);
-    } catch (error) {
-      console.log(
-        `Embedding failed (attempt ${attempt}/${retries})`
-      );
-      if (attempt === retries) throw error;
-      const delay = attempt * 5000;
-      console.log(`Retrying in ${delay / 1000}s...`);
-      await sleep(delay);
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            return await generateEmbeddings(texts);
+        } catch (error) {
+            console.log(
+                `Embedding failed (attempt ${attempt}/${retries})`
+            );
+            if (attempt === retries) throw error;
+            const delay = attempt * 5000;
+            console.log(`Retrying in ${delay / 1000}s...`);
+            await sleep(delay);
+        }
     }
-  }
 
-  throw new Error("Embedding failed after all retries");
+    throw new Error("Embedding failed after all retries");
 }
 
 // ─── Core ingest ─────────────────────────────────────────
@@ -94,193 +94,193 @@ export async function generateBatchWithRetry(
 // Saves progress to disk after every successful batch so
 // a crash mid-ingestion doesn't lose completed work.
 export async function ingestFile(
-  target: FileTarget,
-  opts: { verbose?: boolean } = {}
+    target: FileTarget,
+    opts: { verbose?: boolean } = {}
 ): Promise<FileResult> {
 
-  const { file, folder } = target;
-  const { verbose = false } = opts;
-  const fileStartTime = Date.now();
+    const { file, folder } = target;
+    const { verbose = false } = opts;
+    const fileStartTime = Date.now();
 
-  const log = (...args: any[]) => console.log(...args);
-  const detail = (...args: any[]) =>
-    verbose && console.log(...args);
+    const log = (...args: any[]) => console.log(...args);
+    const detail = (...args: any[]) =>
+        verbose && console.log(...args);
 
-  log(`\n${"─".repeat(50)}`);
-  log(`Ingesting: ${file.name} [${folder}]`);
+    log(`\n${"─".repeat(50)}`);
+    log(`Ingesting: ${file.name} [${folder}]`);
 
-  // ── Load existing state ──────────────────────────────
-  let documents: VectorDocument[] = [];
+    // ── Load existing state ──────────────────────────────
+    let documents: VectorDocument[] = [];
 
-  if (vectorFileExists(folder, file.name)) {
-    documents = loadVectorFile(folder, file.name);
-    log(`Existing vectors: ${documents.length}`);
-  }
-
-  const failedChunks: any[] =
-    loadFailedChunks(folder, file.name);
-
-  const existingIds   = new Set(documents.map((d) => d.id));
-  const failedIds     = new Set(failedChunks.map((c: any) => c.id));
-
-  // ── Early skip: already complete ────────────────────
-  if (documents.length > 0 && failedChunks.length === 0) {
-    log(`Already complete — skipping`);
-    return {
-      fileName:      file.name,
-      regulationType: folder,
-      status:        "skipped",
-      totalChunks:   documents.length,
-      embeddedChunks: documents.length,
-      failedChunks:  0,
-      durationSeconds: 0,
-    };
-  }
-
-  // ── Download & extract ───────────────────────────────
-  log("Downloading PDF...");
-  const pdfBuffer = await downloadPdf(file.id);
-
-  log("Extracting text...");
-  const text = await extractPdfText(pdfBuffer);
-  detail(`Extracted: ${text.length} chars`);
-
-  // ── Chunk ────────────────────────────────────────────
-  const chunks = chunkLegalText({
-    text,
-    fileId:         file.id,
-    fileName:       file.name,
-    regulationType: folder || "unknown",
-  });
-
-  log(`Total chunks: ${chunks.length}`);
-
-  // ── Secondary skip: chunk count matches ─────────────
-  if (documents.length >= chunks.length) {
-    log(`Already complete (chunk count match) — skipping`);
-    return {
-      fileName:        file.name,
-      regulationType:  folder,
-      status:          "skipped",
-      totalChunks:     chunks.length,
-      embeddedChunks:  documents.length,
-      failedChunks:    0,
-      durationSeconds: (Date.now() - fileStartTime) / 1000,
-    };
-  }
-
-  // ── Filter pending chunks ────────────────────────────
-  const pendingChunks = chunks.filter((chunk) => {
-
-    if (existingIds.has(chunk.id)) return false;
-
-    if (failedIds.has(chunk.id)) {
-      detail(`Skipping failed: ${chunk.id}`);
-      return false;
+    if (vectorFileExists(folder, file.name)) {
+        documents = loadVectorFile(folder, file.name);
+        log(`Existing vectors: ${documents.length}`);
     }
 
-    if (chunk.content.trim().length < 100) {
-      detail(`Skipping small: ${chunk.id}`);
-      return false;
+    const failedChunks: any[] =
+        loadFailedChunks(folder, file.name);
+
+    const existingIds = new Set(documents.map((d) => d.id));
+    const failedIds = new Set(failedChunks.map((c: any) => c.id));
+
+    // ── Early skip: already complete ────────────────────
+    if (documents.length > 0 && failedChunks.length === 0) {
+        log(`Already complete — skipping`);
+        return {
+            fileName: file.name,
+            regulationType: folder,
+            status: "skipped",
+            totalChunks: documents.length,
+            embeddedChunks: documents.length,
+            failedChunks: 0,
+            durationSeconds: 0,
+        };
     }
 
-    return true;
-  });
+    // ── Download & extract ───────────────────────────────
+    log("Downloading PDF...");
+    const pdfBuffer = await downloadPdf(file.id);
 
-  log(`Pending  : ${pendingChunks.length}`);
-  log(`Embedded : ${existingIds.size}`);
-  log(`Failed   : ${failedIds.size}`);
+    log("Extracting text...");
+    const text = await extractPdfText(pdfBuffer);
+    detail(`Extracted: ${text.length} chars`);
 
-  if (pendingChunks.length === 0) {
-    log("Nothing to embed");
-    return {
-      fileName:        file.name,
-      regulationType:  folder,
-      status:          "skipped",
-      totalChunks:     chunks.length,
-      embeddedChunks:  documents.length,
-      failedChunks:    failedChunks.length,
-      durationSeconds: (Date.now() - fileStartTime) / 1000,
-    };
-  }
+    // ── Chunk ────────────────────────────────────────────
+    const chunks = chunkLegalText({
+        text,
+        fileId: file.id,
+        fileName: file.name,
+        regulationType: folder || "unknown",
+    });
 
-  // ── Embed in batches ─────────────────────────────────
-  // Batching here controls save frequency, not API calls.
-  // generateEmbeddings always runs sequentially internally.
-  const batches = batchArray(pendingChunks, BATCH_SIZE);
-  log(`Batches: ${batches.length}`);
+    log(`Total chunks: ${chunks.length}`);
 
-  let processedChunks  = 0;
-  let failedBatchCount = 0;
+    // ── Secondary skip: chunk count matches ─────────────
+    if (documents.length >= chunks.length) {
+        log(`Already complete (chunk count match) — skipping`);
+        return {
+            fileName: file.name,
+            regulationType: folder,
+            status: "skipped",
+            totalChunks: chunks.length,
+            embeddedChunks: documents.length,
+            failedChunks: 0,
+            durationSeconds: (Date.now() - fileStartTime) / 1000,
+        };
+    }
 
-  for (let i = 0; i < batches.length; i++) {
+    // ── Filter pending chunks ────────────────────────────
+    const pendingChunks = chunks.filter((chunk) => {
 
-    const batch = batches[i];
+        if (existingIds.has(chunk.id)) return false;
 
-    try {
-      const texts      = batch.map((c) => c.content);
-      const embeddings = await generateBatchWithRetry(texts);
-
-      for (let j = 0; j < batch.length; j++) {
-        const embedding = embeddings[j];
-
-        if (!embedding) {
-          detail(`Missing embedding: ${batch[j].id}`);
-          failedChunks.push(batch[j]);
-          saveFailedChunks(folder, file.name, failedChunks);
-          continue;
+        if (failedIds.has(chunk.id)) {
+            detail(`Skipping failed: ${chunk.id}`);
+            return false;
         }
 
-        documents.push({ ...batch[j], embedding });
-        processedChunks++;
-      }
+        if (chunk.content.trim().length < 100) {
+            detail(`Skipping small: ${chunk.id}`);
+            return false;
+        }
 
-      // Save progress after every batch
-      saveVectorFile(folder, file.name, documents);
+        return true;
+    });
 
-      const pct = ((processedChunks / pendingChunks.length) * 100)
-        .toFixed(1);
+    log(`Pending  : ${pendingChunks.length}`);
+    log(`Embedded : ${existingIds.size}`);
+    log(`Failed   : ${failedIds.size}`);
 
-      log(`Batch ${i + 1}/${batches.length} — ${pct}% (${processedChunks}/${pendingChunks.length})`);
-
-    } catch (error) {
-
-      log(`Batch ${i + 1} FAILED`);
-      console.error(error);
-
-      failedChunks.push(...batch);
-      saveFailedChunks(folder, file.name, failedChunks);
-
-      failedBatchCount++;
-
-      if (failedBatchCount >= MAX_FAILED_BATCHES) {
-        log(`Max failed batches reached — stopping file`);
-        break;
-      }
+    if (pendingChunks.length === 0) {
+        log("Nothing to embed");
+        return {
+            fileName: file.name,
+            regulationType: folder,
+            status: "skipped",
+            totalChunks: chunks.length,
+            embeddedChunks: documents.length,
+            failedChunks: failedChunks.length,
+            durationSeconds: (Date.now() - fileStartTime) / 1000,
+        };
     }
-  }
 
-  const durationSeconds = (Date.now() - fileStartTime) / 1000;
-  const status: FileResult["status"] =
-    failedChunks.length === 0
-      ? "completed"
-      : processedChunks > 0
-        ? "partial"
-        : "failed";
+    // ── Embed in batches ─────────────────────────────────
+    // Batching here controls save frequency, not API calls.
+    // generateEmbeddings always runs sequentially internally.
+    const batches = batchArray(pendingChunks, BATCH_SIZE);
+    log(`Batches: ${batches.length}`);
 
-  log(`Done: ${file.name}`);
-  log(`Status   : ${status}`);
-  log(`Embedded : ${processedChunks}`);
-  log(`Failed   : ${failedChunks.length}`);
-  log(`Duration : ${durationSeconds.toFixed(1)}s`);
+    let processedChunks = 0;
+    let failedBatchCount = 0;
 
-  return {
-    fileName:        file.name,
-    regulationType:  folder,
-    status,
-    totalChunks:     chunks.length,
-    embeddedChunks:  processedChunks,
-    failedChunks:    failedChunks.length,
-    durationSeconds,
-  };
+    for (let i = 0; i < batches.length; i++) {
+
+        const batch = batches[i];
+
+        try {
+            const texts = batch.map((c) => c.content);
+            const embeddings = await generateBatchWithRetry(texts);
+
+            for (let j = 0; j < batch.length; j++) {
+                const embedding = embeddings[j];
+
+                if (!embedding) {
+                    detail(`Missing embedding: ${batch[j].id}`);
+                    failedChunks.push(batch[j]);
+                    saveFailedChunks(folder, file.name, failedChunks);
+                    continue;
+                }
+
+                documents.push({ ...batch[j], embedding });
+                processedChunks++;
+            }
+
+            // Save progress after every batch
+            saveVectorFile(folder, file.name, documents);
+
+            const pct = ((processedChunks / pendingChunks.length) * 100)
+                .toFixed(1);
+
+            log(`Batch ${i + 1}/${batches.length} — ${pct}% (${processedChunks}/${pendingChunks.length})`);
+
+        } catch (error) {
+
+            log(`Batch ${i + 1} FAILED`);
+            console.error(error);
+
+            failedChunks.push(...batch);
+            saveFailedChunks(folder, file.name, failedChunks);
+
+            failedBatchCount++;
+
+            if (failedBatchCount >= MAX_FAILED_BATCHES) {
+                log(`Max failed batches reached — stopping file`);
+                break;
+            }
+        }
+    }
+
+    const durationSeconds = (Date.now() - fileStartTime) / 1000;
+    const status: FileResult["status"] =
+        failedChunks.length === 0
+            ? "completed"
+            : processedChunks > 0
+                ? "partial"
+                : "failed";
+
+    log(`Done: ${file.name}`);
+    log(`Status   : ${status}`);
+    log(`Embedded : ${processedChunks}`);
+    log(`Failed   : ${failedChunks.length}`);
+    log(`Duration : ${durationSeconds.toFixed(1)}s`);
+
+    return {
+        fileName: file.name,
+        regulationType: folder,
+        status,
+        totalChunks: chunks.length,
+        embeddedChunks: processedChunks,
+        failedChunks: failedChunks.length,
+        durationSeconds,
+    };
 }
