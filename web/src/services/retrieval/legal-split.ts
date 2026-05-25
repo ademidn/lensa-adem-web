@@ -12,31 +12,48 @@ export interface LegalSection {
 }
 
 // ─── BAB extractor ────────────────────────────────────────
+// Only scan the first 3 lines of a block to avoid 
+// matching BAB references inside prose content.
 // Matches lines like:
 //   "BAB I", "BAB II", "BAB IV - Ketentuan Umum"
 //   "BAB I\nKETENTUAN UMUM" (title on next line)
-function extractBab(line: string): string | undefined {
-  const match = line
+function extractBab(text: string): string | undefined {
+  const firstLines = text
     .trimStart()
-    .match(/^(BAB\s+[IVXLCDM]+)(?:\s*[-–—]\s*(.+))?/i);
+    .split("\n")
+    .slice(0, 3)
+    .join("\n");
+
+  const match = firstLines.match(
+    /^(BAB\s+[IVXLCDM]+)(?:\s*[-–—]\s*(.+))?/im
+  );
 
   if (!match) return undefined;
 
   const number = match[1].toUpperCase().replace(/\s+/, " ");
-  const title  = match[2]?.trim();
+  const title = match[2]?.trim();
 
   return title ? `${number} - ${title}` : number;
 }
 
 // ─── Pasal extractor ─────────────────────────────────────
 // Matches "Pasal 3", "PASAL 12", "Pasal 3A"
-function extractPasal(line: string): string | undefined {
-  const match = line
-    .trimStart()
-    .match(/^(PASAL|Pasal)\s+(\d+[A-Za-z]?)/);
+function extractPasal(text: string): string | undefined {
+  // Only look at the first 3 lines — Pasal header is always
+  // at the top of the section if it exists.
+  // Prevents matching "Pasal 5" inside prose citations.
 
-  if (!match) return undefined;
-  return `Pasal ${match[2]}`;
+  const firstLines = text
+    .trimStart()
+    .split("\n")
+    .slice(0, 3)
+    .join("\n");
+
+  const match = firstLines.match(
+    /^(PASAL|Pasal)\s+(\d+[A-Za-z]?)/m
+  );
+
+  return match ? `Pasal ${match[2]}` : undefined;
 }
 
 // ─── Main splitter ────────────────────────────────────────
@@ -65,38 +82,18 @@ export function splitByLegalSections(
     const trimmed = raw.trim();
     if (trimmed.length < 200) continue;
 
-    // Scan every line in the section for a BAB header.
-    // BAB lines appear before the Pasal line in the same
-    // text block when the document uses this layout:
-    //
-    //   BAB II - Kewajiban Produsen
-    //   Pasal 5
-    //   (1) Produsen wajib...
-    //
-    // When found, update currentBab so all subsequent
-    // sections inherit it until the next BAB appears.
-    const lines = trimmed.split("\n");
-    for (const line of lines) {
-      const bab = extractBab(line);
-      if (bab) {
-        currentBab = bab;
-        break; // only one BAB per section block
-      }
-    }
+    // Scan first 3 lines for a BAB header.
+    // Update currentBab so subsequent sections inherit it.
+    const bab = extractBab(trimmed);
+    if (bab) currentBab = bab;
 
-    // Extract Pasal from the first matching line
-    let pasal: string | undefined;
-    for (const line of lines) {
-      const p = extractPasal(line);
-      if (p) {
-        pasal = p;
-        break;
-      }
-    }
+    // Pasal is extracted from the first 3 lines only.
+    // prevents false matches on prose citations.
+    const pasal = extractPasal(trimmed);
 
     sections.push({
-      text:  trimmed,
-      bab:   currentBab,
+      text: trimmed,
+      bab: currentBab,
       pasal,
     });
   }
