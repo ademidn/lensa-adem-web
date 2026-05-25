@@ -8,6 +8,14 @@ import { SearchResult } from "../vector/search";
 
 const MODEL = "gemini-2.5-flash";
 
+// ─── Corpus manifest ──────────────────────────────────────
+// Human-readable list of what's actually in the vector store.
+// Update this whenever you add new regulation documents.
+const AVAILABLE_REGULATIONS = [
+  "Permen LH No. 75 Tahun 2019 — Peta Jalan Pengurangan Sampah oleh Produsen (EPR)",
+  "UU No. 18 Tahun 2008 — Pengelolaan Sampah",
+];
+
 // ─── Citation shape ───────────────────────────────────────
 export interface Citation {
   index: number;
@@ -25,6 +33,90 @@ export interface GeneratedAnswer {
   citations: Citation[];
   totalChunksUsed: number;
   model: string;
+}
+
+// ─── Query type classifier ────────────────────────────────
+// Detects conversational and meta queries that should bypass
+// the vector store entirely and get a direct LLM response.
+//
+// Returns "conversational" | "regulation"
+async function classifyQuery(
+  query: string
+): Promise<"conversational" | "regulation"> {
+ 
+  const prompt = `Klasifikasikan pertanyaan berikut ke dalam salah satu kategori:
+ 
+"conversational" — pertanyaan umum, sapaan, pertanyaan tentang sistem ini,
+permintaan daftar regulasi, atau pertanyaan yang tidak membutuhkan pencarian
+dokumen regulasi spesifik. Contoh: "apa yang bisa kamu bantu?",
+"regulasi apa saja yang tersedia?", "kok bisa tidak ketemu?", "terima kasih".
+ 
+"regulation" — pertanyaan yang membutuhkan pencarian dan kutipan dari dokumen
+regulasi lingkungan hidup Indonesia. Contoh: "apa sanksi pelanggaran AMDAL?",
+"siapa yang wajib menyusun UKL-UPL?", "kewajiban produsen dalam EPR".
+ 
+Pertanyaan: "${query}"
+ 
+Jawab hanya dengan satu kata: conversational ATAU regulation`;
+ 
+  const response = await genAI.models.generateContent({
+    model: MODEL,
+    config: { temperature: 0 },
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+ 
+  const result =
+    response.candidates?.[0]?.content?.parts?.[0]?.text
+      ?.trim()
+      .toLowerCase() ?? "";
+ 
+  return result.includes("conversational")
+    ? "conversational"
+    : "regulation";
+}
+ 
+// ─── Conversational response generator ───────────────────
+// Handles meta and conversational queries without
+// touching the vector store.
+async function generateConversationalAnswer(
+  query: string
+): Promise<GeneratedAnswer> {
+ 
+  const regulationList = AVAILABLE_REGULATIONS
+    .map((r, i) => `${i + 1}. ${r}`)
+    .join("\n");
+ 
+  const prompt = `Anda adalah asisten konsultasi regulasi lingkungan hidup Indonesia
+bernama Lensa Adem. Basis data regulasi yang tersedia saat ini:
+ 
+${regulationList}
+ 
+Pertanyaan pengguna: "${query}"
+ 
+Panduan:
+- Jawab secara alami, singkat, dan ramah — seperti asisten yang membantu.
+- Jika ditanya regulasi apa yang tersedia, sebutkan daftar di atas.
+- Jika ditanya kenapa pertanyaan tidak terjawab, jelaskan bahwa topik tersebut
+  mungkin belum ada dalam basis data atau perlu penambahan dokumen regulasi baru.
+- Jangan gunakan bullet point berlebihan. Jawab dalam 2-3 kalimat maksimal
+  kecuali memang perlu lebih panjang.
+- Jangan sebut nama model AI atau teknologi internal.`;
+ 
+  const response = await genAI.models.generateContent({
+    model: MODEL,
+    config: { temperature: 0.3 },
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+ 
+  const answer =
+    response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+ 
+  return {
+    answer: answer || "Ada yang bisa saya bantu terkait regulasi lingkungan hidup?",
+    citations: [],
+    totalChunksUsed: 0,
+    model: MODEL,
+  };
 }
 
 // ─── Regulation name formatter ────────────────────────────
@@ -209,19 +301,35 @@ export async function generateAnswer(
   chunks: SearchResult[]
 ): Promise<GeneratedAnswer> {
 
-  // Threshold filtered everything — return clean rejection
-  // without calling the LLM at all (saves latency + cost).
+  // ── Step 1: Classify the query ───────────────────────
+  // Conversational and meta queries bypass vector search
+  // entirely and get a direct, natural LLM response.
+  const queryType = await classifyQuery(query);
+ 
+  if (queryType === "conversational") {
+    return generateConversationalAnswer(query);
+  }
+ 
+  // ── Step 2: No relevant chunks found ────────────────
+  // Threshold filtered everything — skip LLM call,
+  // return a natural explanation with corpus scope hint.
   if (chunks.length === 0) {
+    const regulationList = AVAILABLE_REGULATIONS
+      .map((r) => `• ${r}`)
+      .join("\n");
+ 
     return {
       answer:
-        "Tidak ditemukan informasi yang relevan dalam regulasi yang tersedia saat ini. " +
-        "Silakan ajukan pertanyaan lain seputar pengelolaan sampah, EPR, atau izin lingkungan hidup.",
+        `Topik ini belum tercakup dalam basis data regulasi yang tersedia saat ini.\n\n` +
+        `Regulasi yang tersedia:\n${regulationList}\n\n` +
+        `Coba ajukan pertanyaan seputar pengelolaan sampah, kewajiban produsen, atau izin lingkungan.`,
       citations: [],
       totalChunksUsed: 0,
       model: MODEL,
     };
   }
 
+  // ── Step 3: Generate grounded answer from chunks ─────
   const context   = buildContext(chunks);
   const citations = buildCitations(chunks);
 
@@ -258,7 +366,8 @@ Jawab pertanyaan di atas. Jika kutipan tidak cukup, katakan demikian secara eksp
     throw new Error("Gemini returned empty answer");
   }
 
-  // ── Filter to only citations the model actually used ──
+  // ── Step 4: Drop citations the model didn't use ──────
+  // Filter to only citations the model actually used
   // Drops irrelevant chunks from the sidebar and re-indexes
   // so citation numbers in the answer text stay in sync.
   const { answer: finalAnswer, citations: finalCitations } =
