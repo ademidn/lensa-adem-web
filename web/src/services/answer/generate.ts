@@ -159,8 +159,8 @@ export async function generateAnswer(
   if (chunks.length === 0) {
     return {
       answer:
-        "Topik ini belum tercakup dalam basis data regulasi yang tersedia saat ini. " +
-        "Coba pertanyaan lain seputar pengelolaan sampah, EPR, atau izin lingkungan hidup.",
+        "Tidak ditemukan penjelasan yang cukup relevan dalam regulasi yang tersedia saat ini. " +
+        "Silakan ajukan pertanyaan lain seputar pengelolaan sampah, EPR, atau izin lingkungan hidup.",
       citations: [],
       totalChunksUsed: 0,
       model: MODEL,
