@@ -106,6 +106,61 @@ function buildCitations(
   }));
 }
 
+// ─── Filter citations to only those used in the answer ───
+// The model receives chunks [1]...[n] but may only cite
+// a subset. This removes unused citations and re-indexes
+// the survivors so numbers stay consecutive in the UI.
+//
+// It also rewrites the answer text so e.g. [3] becomes [2]
+// if chunk 2 was dropped — keeping answer and citation list
+// perfectly in sync.
+function filterCitationsByUsage(
+  answer: string,
+  citations: Citation[]
+): { answer: string; citations: Citation[] } {
+ 
+  // 1. Collect every [n] that appears in the answer text
+  const usedIndices = new Set(
+    [...answer.matchAll(/\[(\d+)\]/g)]
+      .map((m) => parseInt(m[1], 10))
+  );
+ 
+  // 2. Keep only citations the model actually referenced,
+  //    preserving original order
+  const used = citations.filter(
+    (c) => usedIndices.has(c.index)
+  );
+ 
+  // 3. Build a remapping: old index → new consecutive index
+  //    e.g. if [1, 3, 5] were cited → they become [1, 2, 3]
+  const remap = new Map<number, number>();
+  used.forEach((c, i) => {
+    remap.set(c.index, i + 1);
+  });
+ 
+  // 4. Rewrite [n] references in the answer text
+  const rewrittenAnswer = answer.replace(
+    /\[(\d+)\]/g,
+    (match, num) => {
+      const newIndex = remap.get(parseInt(num, 10));
+      return newIndex !== undefined
+        ? `[${newIndex}]`
+        : match;
+    }
+  );
+ 
+  // 5. Update index field on each kept citation
+  const reindexed = used.map((c, i) => ({
+    ...c,
+    index: i + 1,
+  }));
+ 
+  return {
+    answer:    rewrittenAnswer,
+    citations: reindexed,
+  };
+}
+
 // ─── System prompt ────────────────────────────────────────
 const SYSTEM_PROMPT = `Anda adalah konsultan hukum lingkungan hidup Indonesia yang berpengalaman.
 Jawab pertanyaan pengguna secara langsung, lugas, dan profesional —
@@ -159,7 +214,7 @@ export async function generateAnswer(
   if (chunks.length === 0) {
     return {
       answer:
-        "Tidak ditemukan penjelasan yang cukup relevan dalam regulasi yang tersedia saat ini. " +
+        "Tidak ditemukan informasi yang relevan dalam regulasi yang tersedia saat ini. " +
         "Silakan ajukan pertanyaan lain seputar pengelolaan sampah, EPR, atau izin lingkungan hidup.",
       citations: [],
       totalChunksUsed: 0,
@@ -175,7 +230,7 @@ export async function generateAnswer(
   // prevents the model from attributing the source to the user.
   const userPrompt = `Pertanyaan: ${query}
 
-Kutipan regulasi dari basis data internal (gunakan HANYA ini sebagai sumber jawaban):
+Kutipan regulasi dari basis data internal (HANYA gunakan ini sebagai sumber jawaban):
 ${context}
 
 Jawab pertanyaan di atas. Jika kutipan tidak cukup, katakan demikian secara eksplisit.`;
@@ -203,10 +258,16 @@ Jawab pertanyaan di atas. Jika kutipan tidak cukup, katakan demikian secara eksp
     throw new Error("Gemini returned empty answer");
   }
 
+  // ── Filter to only citations the model actually used ──
+  // Drops irrelevant chunks from the sidebar and re-indexes
+  // so citation numbers in the answer text stay in sync.
+  const { answer: finalAnswer, citations: finalCitations } =
+    filterCitationsByUsage(answer, citations);
+ 
   return {
-    answer,
-    citations,
+    answer:          finalAnswer,
+    citations:       finalCitations,
     totalChunksUsed: chunks.length,
-    model: MODEL,
+    model:           MODEL,
   };
 }
