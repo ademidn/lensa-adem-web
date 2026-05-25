@@ -44,7 +44,7 @@ export interface SearchResult {
 //    and the score of the highest irrelevant chunk
 // 4. Set threshold between those two values
 // 5. Set DEBUG_SCORES = false before deploying
-const MIN_SIMILARITY_SCORE = 0.6;
+const MIN_SIMILARITY_SCORE = 0.7;
 
 // Set to true temporarily to log top scores per query.
 // Always false in production.
