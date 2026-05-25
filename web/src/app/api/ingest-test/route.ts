@@ -23,7 +23,7 @@ import { invalidateCache }
 
 import {
   ingestFile,
-} from "../ingest/ingest-shared";
+} from "@/app/api/ingest/ingest-shared";
 
 import {
   chunkLegalText,
