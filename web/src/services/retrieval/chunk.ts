@@ -36,6 +36,14 @@ function extractAyat(text: string): string | undefined {
   return match ? `(${match[1]})` : undefined;
 }
 
+// ─── Structural guard ────────────────────────────────────────
+// Returns true if the section has legal structure markers.
+// Unstructured short blocks (preambles, reference lists)
+// are filtered out to reduce noise in the vector store.
+function isStructural(section: LegalSection): boolean {
+  return !!(section.bab || section.pasal);
+}
+
 // ─── Chunk Builder ────────────────────────────────────────
 // Single source of truth for creating a RegulationChunk.
 // Spreads only defined metadata fields — avoids storing
@@ -57,9 +65,9 @@ function makeChunk(
       fileName,
       regulationType,
       chunkIndex: index,
-      ...(section.bab   !== undefined && { bab:   section.bab }),
+      ...(section.bab !== undefined && { bab: section.bab }),
       ...(section.pasal !== undefined && { pasal: section.pasal }),
-      ...(ayat          !== undefined && { ayat }),
+      ...(ayat !== undefined && { ayat }),
     },
   };
 }
@@ -73,6 +81,11 @@ export function chunkLegalText({
 }: ChunkInput): RegulationChunk[] {
 
   const MAX_CHUNK_SIZE = 2000;
+
+  // Minimum size for unstructured blocks (no Bab/Pasal).
+  // Structured blocks keep the existing 200-char floor.
+  const MIN_UNSTRUCTURED_SIZE = 400;
+
   const chunks: RegulationChunk[] = [];
 
   // Step 1: Split by legal sections with BAB/Pasal context
@@ -82,12 +95,19 @@ export function chunkLegalText({
 
     // Extract ayat BEFORE cleanContent — whitespace around
     // "(1)" markers is more reliable in the raw text
-    const ayat    = extractAyat(section.text);
+    const ayat = extractAyat(section.text);
     const cleaned = cleanContent(section.text);
 
-    if (cleaned.length < 200) {
+    // Short unstructured blocks are skipped
+    const minSize = isStructural(section)
+      ? 200
+      : MIN_UNSTRUCTURED_SIZE;
+    if (cleaned.length < minSize) {
       console.log(
-        `Skipping small chunk (${cleaned.length} chars)`
+        `Skipping chunk (${cleaned.length} chars),`,
+        isStructural(section)
+          ? `${section.pasal ?? section.bab}`
+          : "unstructured"
       );
       continue;
     }
@@ -108,8 +128,7 @@ export function chunkLegalText({
     // All sub-chunks inherit the parent BAB and Pasal so
     // citations stay accurate across the split boundary.
     const paragraphs = cleaned.split(/\n\n+/);
-    let buffer    = "";
-    let subIndex  = 0;
+    let buffer = "";
 
     for (const paragraph of paragraphs) {
 
@@ -117,26 +136,20 @@ export function chunkLegalText({
         buffer.length + paragraph.length > MAX_CHUNK_SIZE &&
         buffer.length > 0
       ) {
-        // Derive ayat for this specific buffer slice
-        const bufferAyat = extractAyat(buffer);
-
         chunks.push(
           makeChunk(
-            buffer.trim(), section, bufferAyat,
+            buffer.trim(), section, extractAyat(buffer),
             fileId, fileName, regulationType,
             chunks.length
           )
         );
-
-        buffer   = "";
-        subIndex++;
+        buffer = "";
       }
 
       buffer += (buffer ? "\n\n" : "") + paragraph;
     }
 
-    // Save remaining buffer
-    if (buffer.trim().length > 200) {
+    if (buffer.trim().length >= 200) {
       chunks.push(
         makeChunk(
           buffer.trim(), section, extractAyat(buffer),
