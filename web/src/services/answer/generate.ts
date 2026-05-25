@@ -21,8 +21,9 @@ export interface Citation {
   index: number;
   fileName: string;
   regulationType: string;
-  article?: string;
-  section?: string;
+  bab?: string;
+  pasal?: string;
+  ayat?: string;
   chunkIndex: number;
   preview: string;
 }
@@ -43,7 +44,7 @@ export interface GeneratedAnswer {
 async function classifyQuery(
   query: string
 ): Promise<"conversational" | "regulation"> {
- 
+
   const prompt = `Klasifikasikan pertanyaan berikut ke dalam salah satu kategori:
  
 "conversational" — pertanyaan umum, sapaan, pertanyaan tentang sistem ini,
@@ -58,34 +59,34 @@ regulasi lingkungan hidup Indonesia. Contoh: "apa sanksi pelanggaran AMDAL?",
 Pertanyaan: "${query}"
  
 Jawab hanya dengan satu kata: conversational ATAU regulation`;
- 
+
   const response = await genAI.models.generateContent({
     model: MODEL,
     config: { temperature: 0 },
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
- 
+
   const result =
     response.candidates?.[0]?.content?.parts?.[0]?.text
       ?.trim()
       .toLowerCase() ?? "";
- 
+
   return result.includes("conversational")
     ? "conversational"
     : "regulation";
 }
- 
+
 // ─── Conversational response generator ───────────────────
 // Handles meta and conversational queries without
 // touching the vector store.
 async function generateConversationalAnswer(
   query: string
 ): Promise<GeneratedAnswer> {
- 
+
   const regulationList = AVAILABLE_REGULATIONS
     .map((r, i) => `${i + 1}. ${r}`)
     .join("\n");
- 
+
   const prompt = `Anda adalah asisten konsultasi regulasi lingkungan hidup Indonesia
 bernama Lensa Adem. Basis data regulasi yang tersedia saat ini:
  
@@ -101,16 +102,16 @@ Panduan:
 - Jangan gunakan bullet point berlebihan. Jawab dalam 2-3 kalimat maksimal
   kecuali memang perlu lebih panjang.
 - Jangan sebut nama model AI atau teknologi internal.`;
- 
+
   const response = await genAI.models.generateContent({
     model: MODEL,
     config: { temperature: 0.3 },
     contents: [{ role: "user", parts: [{ text: prompt }] }],
   });
- 
+
   const answer =
     response.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
- 
+
   return {
     answer: answer || "Ada yang bisa saya bantu terkait regulasi lingkungan hidup?",
     citations: [],
@@ -138,14 +139,14 @@ function formatRegulationName(
   if (!match) return base.replace(/_/g, " ");
 
   const number = match[1];
-  const year   = match[2];
+  const year = match[2];
 
   const prefixMap: Record<string, string> = {
-    uu:      `UU No. ${number} Tahun ${year}`,
-    pp:      `PP No. ${number} Tahun ${year}`,
-    permen:  `Permen LH No. ${number} Tahun ${year}`,
+    uu: `UU No. ${number} Tahun ${year}`,
+    pp: `PP No. ${number} Tahun ${year}`,
+    permen: `Permen LH No. ${number} Tahun ${year}`,
     perpres: `Perpres No. ${number} Tahun ${year}`,
-    perda:   `Perda No. ${number} Tahun ${year}`,
+    perda: `Perda No. ${number} Tahun ${year}`,
   };
 
   return prefixMap[regulationType.toLowerCase()]
@@ -172,7 +173,9 @@ function buildContext(
 
       const source = [
         regulationName,
-        chunk.metadata.article,
+        chunk.metadata.bab,
+        chunk.metadata.pasal,
+        chunk.metadata.ayat,
       ]
         .filter(Boolean)
         .join(", ");
@@ -191,8 +194,9 @@ function buildCitations(
     index: index + 1,
     fileName: chunk.metadata.fileName,
     regulationType: chunk.metadata.regulationType,
-    article: chunk.metadata.article,
-    section: chunk.metadata.section,
+    bab: chunk.metadata.bab,
+    pasal: chunk.metadata.pasal,
+    ayat: chunk.metadata.ayat,
     chunkIndex: chunk.metadata.chunkIndex,
     preview: chunk.content.slice(0, 200),
   }));
@@ -210,26 +214,26 @@ function filterCitationsByUsage(
   answer: string,
   citations: Citation[]
 ): { answer: string; citations: Citation[] } {
- 
+
   // 1. Collect every [n] that appears in the answer text
   const usedIndices = new Set(
     [...answer.matchAll(/\[(\d+)\]/g)]
       .map((m) => parseInt(m[1], 10))
   );
- 
+
   // 2. Keep only citations the model actually referenced,
   //    preserving original order
   const used = citations.filter(
     (c) => usedIndices.has(c.index)
   );
- 
+
   // 3. Build a remapping: old index → new consecutive index
   //    e.g. if [1, 3, 5] were cited → they become [1, 2, 3]
   const remap = new Map<number, number>();
   used.forEach((c, i) => {
     remap.set(c.index, i + 1);
   });
- 
+
   // 4. Rewrite [n] references in the answer text
   const rewrittenAnswer = answer.replace(
     /\[(\d+)\]/g,
@@ -240,15 +244,15 @@ function filterCitationsByUsage(
         : match;
     }
   );
- 
+
   // 5. Update index field on each kept citation
   const reindexed = used.map((c, i) => ({
     ...c,
     index: i + 1,
   }));
- 
+
   return {
-    answer:    rewrittenAnswer,
+    answer: rewrittenAnswer,
     citations: reindexed,
   };
 }
@@ -305,11 +309,11 @@ export async function generateAnswer(
   // Conversational and meta queries bypass vector search
   // entirely and get a direct, natural LLM response.
   const queryType = await classifyQuery(query);
- 
+
   if (queryType === "conversational") {
     return generateConversationalAnswer(query);
   }
- 
+
   // ── Step 2: No relevant chunks found ────────────────
   // Threshold filtered everything — skip LLM call,
   // return a natural explanation with corpus scope hint.
@@ -317,7 +321,7 @@ export async function generateAnswer(
     const regulationList = AVAILABLE_REGULATIONS
       .map((r) => `• ${r}`)
       .join("\n");
- 
+
     return {
       answer:
         `Topik ini belum tercakup dalam basis data regulasi yang tersedia saat ini.\n\n` +
@@ -330,7 +334,7 @@ export async function generateAnswer(
   }
 
   // ── Step 3: Generate grounded answer from chunks ─────
-  const context   = buildContext(chunks);
+  const context = buildContext(chunks);
   const citations = buildCitations(chunks);
 
   // ── User prompt ──────────────────────────────────────
@@ -372,11 +376,11 @@ Jawab pertanyaan di atas. Jika kutipan tidak cukup, katakan demikian secara eksp
   // so citation numbers in the answer text stay in sync.
   const { answer: finalAnswer, citations: finalCitations } =
     filterCitationsByUsage(answer, citations);
- 
+
   return {
-    answer:          finalAnswer,
-    citations:       finalCitations,
+    answer: finalAnswer,
+    citations: finalCitations,
     totalChunksUsed: chunks.length,
-    model:           MODEL,
+    model: MODEL,
   };
 }
