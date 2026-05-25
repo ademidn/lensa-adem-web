@@ -23,7 +23,7 @@ import {
   sleep,
   INTER_FILE_DELAY_MS,
   FileResult,
-} from "@/app/api/ingest/ingest-shared";
+} from "./ingest-shared";
 
 // ─────────────────────────────────────────────────────────
 
