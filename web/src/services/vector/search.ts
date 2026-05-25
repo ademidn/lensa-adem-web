@@ -44,11 +44,11 @@ export interface SearchResult {
 //    and the score of the highest irrelevant chunk
 // 4. Set threshold between those two values
 // 5. Set DEBUG_SCORES = false before deploying
-const MIN_SIMILARITY_SCORE = 0.62;
+const MIN_SIMILARITY_SCORE = 0.63;
 
 // Set to true temporarily to log top scores per query.
 // Always false in production.
-const DEBUG_SCORES = true;
+const DEBUG_SCORES = false;
 
 // ─── Main search function ─────────────────────────────────
 export async function searchDocuments(
