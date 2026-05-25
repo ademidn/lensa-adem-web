@@ -1,5 +1,8 @@
 import { RegulationChunk } from "./types";
-import { splitByLegalSections } from "./legal-split";
+import {
+  splitByLegalSections,
+  LegalSection,
+} from "./legal-split";
 
 type ChunkInput = {
   text: string;
@@ -24,45 +27,23 @@ function cleanContent(text: string): string {
     .trim();
 }
 
-// ─── Article Extractor ────────────────────────────────────
-// Parses "Pasal 3" or "PASAL 12" from the start of a
-// section string. Returns undefined if not found.
-//
-// Called on the RAW section (before cleanContent) because
-// the header is always the first meaningful line.
-function extractArticle(
-  sectionText: string
-): string | undefined {
-
-  // Match "Pasal 3", "PASAL 12", "Pasal 3A", etc.
-  const match = sectionText
-    .trimStart()
-    .match(/^(PASAL|Pasal)\s+(\d+[A-Za-z]?)/m);
-
-  if (!match) return undefined;
-
-  // Normalise to title case: "Pasal 3"
-  return `Pasal ${match[2]}`;
-}
-
-// ─── Section Extractor ────────────────────────────────────
-// Parses the first ayat label from the section text,
-// e.g. "(1)", "(2)" — used as a sub-article marker.
+// ─── Ayat Extractor ───────────────────────────────────────
+// Returns the first ayat marker found in the text,
+// e.g. "(1)", "(2)". Used as sub-article granularity.
 // Returns undefined if the section has no ayat structure.
-function extractSection(
-  sectionText: string
-): string | undefined {
-
-  const match = sectionText.match(/\(\d+\)/);
-  return match ? match[0] : undefined;
+function extractAyat(text: string): string | undefined {
+  const match = text.match(/^\s*\((\d+)\)/m);
+  return match ? `(${match[1]})` : undefined;
 }
 
 // ─── Chunk Builder ────────────────────────────────────────
-// Creates a RegulationChunk with all metadata populated.
+// Single source of truth for creating a RegulationChunk.
+// Spreads only defined metadata fields — avoids storing
+// `undefined` keys in the JSON output.
 function makeChunk(
   content: string,
-  article: string | undefined,
-  section: string | undefined,
+  section: LegalSection,
+  ayat: string | undefined,
   fileId: string,
   fileName: string,
   regulationType: string,
@@ -76,9 +57,9 @@ function makeChunk(
       fileName,
       regulationType,
       chunkIndex: index,
-      // Only include defined values — keeps JSON clean
-      ...(article  !== undefined && { article }),
-      ...(section  !== undefined && { section }),
+      ...(section.bab   !== undefined && { bab:   section.bab }),
+      ...(section.pasal !== undefined && { pasal: section.pasal }),
+      ...(ayat          !== undefined && { ayat }),
     },
   };
 }
@@ -94,19 +75,16 @@ export function chunkLegalText({
   const MAX_CHUNK_SIZE = 2000;
   const chunks: RegulationChunk[] = [];
 
-  // Step 1: Split by legal sections (Pasal boundaries)
+  // Step 1: Split by legal sections with BAB/Pasal context
   const sections = splitByLegalSections(text);
 
   for (const section of sections) {
 
-    // Extract article/section BEFORE cleaning —
-    // cleanContent may alter whitespace around headers
-    const article = extractArticle(section);
-    const sec     = extractSection(section);
+    // Extract ayat BEFORE cleanContent — whitespace around
+    // "(1)" markers is more reliable in the raw text
+    const ayat    = extractAyat(section.text);
+    const cleaned = cleanContent(section.text);
 
-    const cleaned = cleanContent(section);
-
-    // Skip sections that are too small after cleaning
     if (cleaned.length < 200) {
       console.log(
         `Skipping small chunk (${cleaned.length} chars)`
@@ -118,7 +96,7 @@ export function chunkLegalText({
     if (cleaned.length <= MAX_CHUNK_SIZE) {
       chunks.push(
         makeChunk(
-          cleaned, article, sec,
+          cleaned, section, ayat,
           fileId, fileName, regulationType,
           chunks.length
         )
@@ -127,11 +105,11 @@ export function chunkLegalText({
     }
 
     // Step 3: Section too large — split by paragraph.
-    // All sub-chunks inherit the parent article metadata
-    // so citations stay accurate even after splitting.
+    // All sub-chunks inherit the parent BAB and Pasal so
+    // citations stay accurate across the split boundary.
     const paragraphs = cleaned.split(/\n\n+/);
-    let buffer = "";
-    let subIndex = 0;
+    let buffer    = "";
+    let subIndex  = 0;
 
     for (const paragraph of paragraphs) {
 
@@ -139,17 +117,19 @@ export function chunkLegalText({
         buffer.length + paragraph.length > MAX_CHUNK_SIZE &&
         buffer.length > 0
       ) {
+        // Derive ayat for this specific buffer slice
+        const bufferAyat = extractAyat(buffer);
+
         chunks.push(
           makeChunk(
-            buffer.trim(),
-            article,
-            // Label sub-chunks: "(1) bagian 1", "(1) bagian 2"
-            sec ? `${sec} bagian ${++subIndex}` : undefined,
+            buffer.trim(), section, bufferAyat,
             fileId, fileName, regulationType,
             chunks.length
           )
         );
-        buffer = "";
+
+        buffer   = "";
+        subIndex++;
       }
 
       buffer += (buffer ? "\n\n" : "") + paragraph;
@@ -159,9 +139,7 @@ export function chunkLegalText({
     if (buffer.trim().length > 200) {
       chunks.push(
         makeChunk(
-          buffer.trim(),
-          article,
-          sec ? `${sec} bagian ${++subIndex}` : undefined,
+          buffer.trim(), section, extractAyat(buffer),
           fileId, fileName, regulationType,
           chunks.length
         )
