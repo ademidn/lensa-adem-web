@@ -119,6 +119,14 @@ atau "berdasarkan konteks yang diberikan".
 Sebut regulasi langsung dengan namanya: "menurut Permen LH No. 75 Tahun 2019",
 "UU No. 18 Tahun 2008 mewajibkan...", dan seterusnya.
 
+ATURAN WAJIB — batas pengetahuan:
+Jawab HANYA berdasarkan kutipan regulasi yang disediakan.
+Jangan mengarang, menyimpulkan, atau mengisi kekosongan dari pengetahuan umum.
+Jika kutipan tidak memuat informasi yang cukup untuk menjawab pertanyaan,
+nyatakan dalam SATU kalimat di awal: "Topik ini belum tercakup dalam basis data
+regulasi yang tersedia saat ini." — lalu sebutkan apa yang MEMANG ada dalam
+kutipan yang masih relevan, jika ada.
+
 Panduan gaya penulisan:
 - Mulai langsung dengan substansi jawaban. Jangan awali dengan kalimat basa-basi
   seperti "Tentu saja" atau "Pertanyaan yang bagus".
@@ -126,8 +134,6 @@ Panduan gaya penulisan:
   atau prosedur yang memang berurutan secara logis.
 - Sisipkan nomor sitasi [1], [2] secara alami di akhir kalimat yang relevan —
   bukan dikelompokkan di akhir paragraf.
-- Jika informasi tidak tersedia dalam kutipan regulasi, sampaikan dengan penjelasan
-  singkat di awal jawaban sebagai disclaimer.
 - Hindari frasa: "konteks regulasi", "berdasarkan konteks", "chunk", "dokumen
   yang diberikan", "regulasi yang Anda berikan".
 - Gunakan kalimat aktif. Hindari konstruksi pasif yang berlebihan.
@@ -148,28 +154,31 @@ export async function generateAnswer(
   chunks: SearchResult[]
 ): Promise<GeneratedAnswer> {
 
+  // Threshold filtered everything — return clean rejection
+  // without calling the LLM at all (saves latency + cost).
   if (chunks.length === 0) {
     return {
       answer:
-        "Maaf, tidak ditemukan informasi yang relevan dalam basis data regulasi untuk pertanyaan ini.",
+        "Topik ini belum tercakup dalam basis data regulasi yang tersedia saat ini. " +
+        "Coba pertanyaan lain seputar pengelolaan sampah, EPR, atau izin lingkungan hidup.",
       citations: [],
       totalChunksUsed: 0,
       model: MODEL,
     };
   }
 
-  const context  = buildContext(chunks);
+  const context   = buildContext(chunks);
   const citations = buildCitations(chunks);
 
   // ── User prompt ──────────────────────────────────────
-  // "Kutipan regulasi" — not "konteks yang diberikan" —
-  // so the model doesn't attribute the source to the user.
+  // "Kutipan regulasi" framing — not "konteks yang diberikan" —
+  // prevents the model from attributing the source to the user.
   const userPrompt = `Pertanyaan: ${query}
 
-Kutipan regulasi dari basis data internal:
+Kutipan regulasi dari basis data internal (gunakan HANYA ini sebagai sumber jawaban):
 ${context}
 
-Jawab pertanyaan di atas berdasarkan kutipan regulasi tersebut.`;
+Jawab pertanyaan di atas. Jika kutipan tidak cukup, katakan demikian secara eksplisit.`;
 
   const response =
     await genAI.models.generateContent({
