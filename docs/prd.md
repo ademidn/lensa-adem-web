@@ -1,8 +1,8 @@
-# /docs/prd.md
+# prd.md
 
 # Lensa Adem — Product Requirements Document (PRD)
 
-Version: 0.1  
+Version: 1.1  
 Status: Draft MVP PRD  
 Owner: Founding Team  
 Document Type: Product Requirements Document  
@@ -14,15 +14,17 @@ Development Methodology: Spec-Driven Development + AI-Assisted Engineering
 
 ## Product Overview
 
-Lensa Adem is an AI-powered regulation intelligence platform focused on Indonesian environmental regulations.
+Lensa Adem is an AI-native regulation intelligence platform focused on Indonesian environmental regulations.
 
 The platform enables users to:
-- search environmental regulations semantically,
+- search Indonesian environmental regulations semantically,
 - interact through conversational AI,
 - retrieve grounded legal references,
-- and receive citation-based answers sourced directly from official regulatory documents.
+- and receive citation-based answers sourced from a curated environmental regulation repository maintained by Lensa Adem.
 
 Unlike traditional keyword-based search systems, Lensa Adem uses Retrieval-Augmented Generation (RAG) to understand user intent and retrieve contextually relevant regulation content from indexed PDF documents.
+
+The platform provides a centralized repository of Indonesian environmental regulations in PDF format managed internally by the system.
 
 The initial MVP focuses on:
 - environmental regulation discovery,
@@ -209,7 +211,8 @@ Use cases:
 The MVP focuses ONLY on:
 - semantic regulation search,
 - conversational retrieval,
-- and citation-grounded answers.
+- citation-grounded answers,
+- and centralized regulation intelligence workflows.
 
 ---
 
@@ -218,13 +221,15 @@ The MVP focuses ONLY on:
 | Feature | Description |
 |---|---|
 | Conversational Chat Interface | Natural-language question answering |
-| PDF Regulation Ingestion | Upload and process regulation PDFs |
+| Internal Regulation Repository | Platform-managed environmental regulation database |
+| Internal Document Ingestion Pipeline | Process and index internally managed regulation PDFs |
 | Semantic Search | Context-aware retrieval |
 | Citation-Based Answers | Responses include source references |
 | Regulation Metadata Indexing | Basic document classification |
 | Conversation Session Memory | Short-term chat continuity |
 | Source Reference Display | Display retrieved regulation sources |
 | Google Drive-Based Document Source | PDFs stored in Google Drive |
+| Progressive Web App (PWA) | Installable cross-device web application |
 
 ---
 
@@ -234,6 +239,7 @@ The following are intentionally excluded from MVP:
 
 | Feature | Reason Excluded |
 |---|---|
+| User Document Upload | MVP focuses on curated internal regulation repository |
 | Multi-Agent AI Systems | Overengineering for early stage |
 | Advanced Analytics Dashboard | Not core to retrieval validation |
 | Enterprise Role Management | Low priority for MVP |
@@ -245,7 +251,75 @@ The following are intentionally excluded from MVP:
 
 ---
 
-# 7. Core User Workflows
+# 7. Regulation Repository Strategy
+
+## Centralized Regulation Database
+
+Lensa Adem maintains a curated repository of Indonesian environmental regulations in PDF format.
+
+The platform is responsible for:
+- collecting regulation documents,
+- organizing regulation metadata,
+- maintaining document consistency,
+- and ensuring reliable retrieval quality.
+
+Users are not required to upload documents.
+
+---
+
+## Source of Regulations
+
+The platform initially indexes only publicly available Indonesian environmental regulations from:
+- official government websites,
+- ministry portals,
+- and legally recognized public sources.
+
+This ensures:
+- source reliability,
+- citation trustworthiness,
+- and legal traceability.
+
+---
+
+## Initial Regulation Coverage
+
+The MVP repository should prioritize:
+- environmental protection regulations,
+- AMDAL regulations,
+- wastewater management regulations,
+- hazardous waste (B3) regulations,
+- air emission regulations,
+- environmental permitting regulations,
+- and related compliance documents.
+
+---
+
+## Source Management
+
+For MVP stage:
+- regulation PDFs are stored in Google Drive,
+- organized by category and regulation type,
+- and synchronized into the retrieval pipeline.
+
+Google Drive is selected because:
+- it minimizes infrastructure complexity,
+- supports rapid iteration,
+- integrates well with Google ecosystem tooling,
+- and aligns with free-tier-first development strategy.
+
+---
+
+## Future Repository Expansion
+
+Future versions may support:
+- automated regulation updates,
+- version tracking,
+- regulation change monitoring,
+- and government-source synchronization.
+
+---
+
+# 8. Core User Workflows
 
 ## Workflow 1 — Regulation Search
 
@@ -299,7 +373,7 @@ User reduces manual research effort significantly.
 
 ---
 
-# 8. User Experience Principles
+# 9. User Experience Principles
 
 ## Principle 1 — Grounded Responses First
 
@@ -335,7 +409,25 @@ Every important answer should:
 
 ---
 
-# 9. Success Metrics
+## Principle 5 — Zero User Setup
+
+Users should be able to:
+- immediately search regulations,
+- ask questions,
+- and retrieve answers without document preparation or upload workflows.
+
+---
+
+## Principle 6 — Mobile-Accessible Research Experience
+
+The platform should provide a responsive and installable Progressive Web App (PWA) experience optimized for:
+- desktop research workflows,
+- tablet usage,
+- and mobile accessibility without requiring native applications.
+
+---
+
+# 10. Success Metrics
 
 ## Primary Success Metrics
 
@@ -346,6 +438,8 @@ Every important answer should:
 | Average Response Time | <5 seconds |
 | Research Time Reduction | >50% faster than manual workflow |
 | User Retention (Early Users) | Weekly repeated usage |
+| Citation Interaction Rate | >60% |
+| Successful First Query Rate | >75% |
 
 ---
 
@@ -363,10 +457,11 @@ Every important answer should:
 - Query completion rate
 - Citation click rate
 - Average session duration
+- Average research completion time
 
 ---
 
-# 10. Constraints
+# 11. Constraints
 
 ## Technical Constraints
 
@@ -377,6 +472,9 @@ Every important answer should:
 | Small-Team Friendly | Architecture must support solo/small team development |
 | Fast Iteration | Avoid overengineering |
 | AI-Assisted Development | Optimized for vibe coding workflows |
+| Centralized Data Ownership | Regulation database maintained internally by platform |
+| Google Drive Storage | Google Drive used as primary PDF storage for MVP |
+| PWA-First Platform Strategy | MVP delivered as Progressive Web App for cross-device accessibility |
 
 ---
 
@@ -390,7 +488,7 @@ Every important answer should:
 
 ---
 
-# 11. Risks and Assumptions
+# 12. Risks and Assumptions
 
 ## Key Risks
 
@@ -414,31 +512,35 @@ Every important answer should:
 
 ---
 
-# 12. Development Priorities
+# 13. Development Priorities
 
 ## Priority Order
 
 ### Priority 1 — Retrieval Quality
+
 The system must retrieve relevant regulation content accurately.
 
 ---
 
 ### Priority 2 — Citation Reliability
+
 Users must trust the sources and references.
 
 ---
 
 ### Priority 3 — Fast Research Workflow
+
 The product must reduce manual effort significantly.
 
 ---
 
 ### Priority 4 — Simple User Experience
+
 Avoid feature overload during MVP.
 
 ---
 
-# 13. MVP Definition
+# 14. MVP Definition
 
 ## MVP Success Criteria
 
@@ -450,13 +552,15 @@ The MVP is considered successful if users can:
 
 ---
 
-# 14. Product Philosophy
+# 15. Product Philosophy
 
 Lensa Adem should prioritize:
-- retrieval quality,
-- grounded responses,
-- simplicity,
-- and trustworthiness.
+- consistent retrieval quality,
+- trusted document sources,
+- stable citation behavior,
+- and simplified user experience.
+
+Lensa Adem should function as a trusted environmental regulation intelligence layer rather than a generic AI chatbot.
 
 The product should avoid:
 - unnecessary complexity,
@@ -475,7 +579,7 @@ Not on:
 
 ---
 
-# 15. Immediate Next Step After PRD
+# 16. Immediate Next Step After PRD
 
 After this PRD is approved, the next document to create is:
 
@@ -485,8 +589,9 @@ After this PRD is approved, the next document to create is:
 
 This document should define:
 - high-level system boundaries,
+- internal regulation repository architecture,
+- document ingestion lifecycle,
 - RAG workflow,
-- ingestion flow,
 - and MVP technical architecture.
 
 Detailed engineering specifications should only be created after the MVP architecture is finalized.
