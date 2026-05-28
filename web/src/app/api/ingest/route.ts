@@ -1,4 +1,4 @@
-// POST /api/ingest
+// GET /api/ingest
 //
 // Processes ALL regulation documents in Google Drive.
 // Skips files that are already fully embedded.
@@ -32,7 +32,31 @@ const ROOT_FOLDER_ID =
 
 // ─────────────────────────────────────────────────────────
 
-export async function GET() {
+function authorize(req: NextRequest):
+  NextResponse | null {
+
+    const secret = 
+      req.headers.get("x-ingest-secret");
+    
+    if (
+      !process.env.INGEST_SECRET ||
+      secret !== process.env.INGEST_SECRET
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Unauthorized" },
+        { status: 401 }
+      );
+    }
+
+    return null; // authorized
+  }
+
+// ─────────────────────────────────────────────────────────
+
+export async function GET(req: NextRequest) {
+
+  const authError = authorize(req);
+  if (authError) return authError;
 
   const startTime = Date.now();
 
