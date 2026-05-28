@@ -8,10 +8,11 @@
 // for quality inspection.
 // ─────────────────────────────────────────────────────────
 
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
   listAllRegulationFiles,
+  downloadPdf,
 } from "@/services/drive/files";
 
 import {
@@ -23,6 +24,7 @@ import { invalidateCache }
 
 import {
   ingestFile,
+  FileTarget,
 } from "../ingest/ingest-shared";
 
 import {
@@ -33,9 +35,6 @@ import {
   extractPdfText,
 } from "@/services/retrieval/extract";
 
-import {
-  downloadPdf,
-} from "@/services/drive/files";
 
 // ─── Test config ──────────────────────────────────────────
 // Set to the exact fileName you want to test.
@@ -48,7 +47,30 @@ const ROOT_FOLDER_ID =
 
 // ─────────────────────────────────────────────────────────
 
-export async function GET() {
+function authorize(req: NextRequest):
+  NextResponse | null {
+
+  const secret = req.headers.get("x-ingest-secret");
+
+  if (
+    !process.env.INGEST_SECRET ||
+    secret !== process.env.INGEST_SECRET
+  ) {
+    return NextResponse.json(
+      { success: false, error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────
+
+export async function GET(req: NextRequest) {
+
+  const authError = authorize(req);
+  if (authError) return authError;
 
   const startTime = Date.now();
 
