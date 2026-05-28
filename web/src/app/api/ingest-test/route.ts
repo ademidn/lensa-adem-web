@@ -12,7 +12,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import {
   listAllRegulationFiles,
-  downloadPdf,
 } from "@/services/drive/files";
 
 import {
@@ -26,14 +25,6 @@ import {
   ingestFile,
   FileTarget,
 } from "../ingest/ingest-shared";
-
-import {
-  chunkLegalText,
-} from "@/services/retrieval/chunk";
-
-import {
-  extractPdfText,
-} from "@/services/retrieval/extract";
 
 
 // ─── Test config ──────────────────────────────────────────
@@ -82,10 +73,7 @@ export async function GET(req: NextRequest) {
     const folders =
       await listAllRegulationFiles(ROOT_FOLDER_ID);
 
-    const allFiles: {
-      file: { id: string; name: string };
-      folder: string;
-    }[] = [];
+    const allFiles: FileTarget[] = [];
 
     for (const folder of folders) {
       for (const file of folder.files) {
@@ -129,28 +117,15 @@ export async function GET(req: NextRequest) {
     // ── Build chunk sample for quality inspection ────
     // Re-extract and chunk to get the sample — this is
     // test-only so the extra processing is acceptable.
-    let chunkSample: object[] = [];
 
-    try {
-      const pdfBuffer = await downloadPdf(target.file.id);
-      const text = await extractPdfText(pdfBuffer);
-      const chunks = chunkLegalText({
-        text,
-        fileId: target.file.id,
-        fileName: target.file.name,
-        regulationType: target.folder || "unknown",
-      });
-
-      chunkSample = chunks.slice(0, 3).map((c) => ({
+    const chunkSample = (result.chunks ?? [])
+      .slice(0, 3)
+      .map((c) => ({
         id: c.id,
         length: c.content.length,
         preview: c.content.slice(0, 200),
         metadata: c.metadata,
       }));
-    } catch {
-      // Non-fatal — result is still returned
-      console.log("Chunk sample generation failed");
-    }
 
     return NextResponse.json({
       success: true,
