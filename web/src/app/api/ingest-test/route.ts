@@ -30,7 +30,7 @@ import {
 // ─── Test config ──────────────────────────────────────────
 // Set to the exact fileName you want to test.
 // Leave empty ("") to use the first file found in Drive.
-const TEST_FILE_NAME = "permenLH_75_2019_epr.pdf";
+const TEST_FILE_NAME = "permenLH_4_2021_amdal.pdf";
 // ─────────────────────────────────────────────────────────
 
 const ROOT_FOLDER_ID =
